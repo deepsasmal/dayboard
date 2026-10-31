@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dayboard</title>
+<link rel="stylesheet" href="newtab.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+<div id="art" aria-hidden="true"></div>
+<div class="light" aria-hidden="true"></div>
+<div class="veil" aria-hidden="true"></div>
+<canvas id="wx" class="wx" aria-hidden="true"></canvas>
+<div class="cap"><button type="button" id="capBtn" class="capbtn" aria-expanded="false" aria-controls="story" title="About this picture"><span id="capT"></span><small id="capA"></small></button>
+  <div class="rfcol">
+  <button type="button" id="zenBtn" class="rf" aria-label="Focus mode" title="Focus mode  (F)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button id="gear" class="rf" aria-expanded="false" aria-controls="menu" aria-haspopup="true" aria-label="Menu" title="Menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div></div>
+<button type="button" id="zenExit" class="pill zenexit" aria-label="Exit focus mode">Exit focus</button>
+<div id="menu" class="menu" hidden role="menu" aria-label="More">
+  <button type="button" id="timeBtn" class="mrow" role="menuitem" title="Your weeks and your year  (W)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h10M7 20.5h10M8 3.5c0 4 4 5 4 8.5s-4 4.5-4 8.5M16 3.5c0 4-4 5-4 8.5s4 4.5 4 8.5"/></svg><span>Time</span></button>
+  <button type="button" id="openDayBtn" class="mrow" role="menuitem" title="A short start-of-day ritual  (O)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="3.5"/><path d="M12 4v3M5.6 8.6l2 2M18.4 8.6l-2 2M3 18h18"/></svg><span>Open the day</span></button>
+  <button type="button" id="lookBtn" class="mrow" role="menuitem" title="Zoom into a detail of the picture  (L)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2M11 8.5v5M8.5 11h5"/></svg><span>Look closer</span></button>
+  <button type="button" id="refresh" class="mrow" role="menuitem" title="Show another picture"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg><span>Another picture</span></button>
+  <button type="button" id="wp" class="mrow" role="menuitem" aria-expanded="false" aria-controls="wpPop" title="Choose a wallpaper"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3L16 12l4 4"/></svg><span>Wallpaper</span></button>
+  <button type="button" id="bk" class="mrow" role="menuitem" aria-expanded="false" aria-controls="bkPop" title="Back up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5"/><path d="M12 12v8M9 15l3-3 3 3"/></svg><span>Back up</span></button>
+  <button type="button" id="zenRow" class="mrow" role="menuitem" title="Just the time, what matters, and the quote  (F)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Focus mode</span></button>
+  <button type="button" id="calm" class="mrow" role="menuitemcheckbox" aria-pressed="false" title="Calm mode  (Z)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 5-13 14-14 0 9-5 14-14 14zM5 19l8-8"/></svg><span>Calm mode</span></button>
+  <i class="msep" aria-hidden="true"></i>
+  <button type="button" id="prefsBtn" class="mrow" role="menuitem" aria-controls="settings" title="Preferences, data and recovery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Preferences</span></button>
+</div>
+<div id="story" class="story" hidden role="dialog" aria-label="About this picture"></div>
+<div id="wpPop" class="wppop" hidden role="dialog" aria-label="Wallpaper">
+  <span class="seg wpseg" id="wpArt" role="group" aria-label="Wallpaper source"><button data-v="paintings">Art</button><button data-v="photos">Nature</button><button data-v="both">Art + Nature</button><button data-v="mine">Mine</button><button data-v="favs" aria-label="Favourites" title="Favourites"><svg width="13" height="13" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.7-9.4-9.4C1.2 7.7 3.2 4.5 6.6 4.5c2 0 3.5 1 5.4 3 1.9-2 3.4-3 5.4-3 3.4 0 5.4 3.2 4 6.6-1.9 4.7-9.4 9.4-9.4 9.4z"/></svg></button></span>
+  <div id="wpBar" class="wpbar" hidden><button type="button" id="wpAdd" class="pill">+ Add pictures</button><small>or drop images anywhere on this panel</small></div>
+  <input id="wpFile" type="file" accept="image/*" multiple hidden>
+  <div id="wpGrid" class="wpgrid" role="listbox" aria-label="Wallpapers"></div>
+  <div class="wprow"><p id="wpName" class="wpname"></p><button type="button" id="wpFav" class="wpfav" aria-pressed="false" aria-label="Favourite this wallpaper" title="Favourite this wallpaper"><svg width="13" height="13" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.7-9.4-9.4C1.2 7.7 3.2 4.5 6.6 4.5c2 0 3.5 1 5.4 3 1.9-2 3.4-3 5.4-3 3.4 0 5.4 3.2 4 6.6-1.9 4.7-9.4 9.4-9.4 9.4z"/></svg></button></div>
+  <div class="bkrow">
+    <button type="button" id="wpSave" class="bkb" title="Download this wallpaper in high resolution"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Save wallpaper</span></button>
+    <button type="button" id="wpNext" class="bkb" title="Show another picture"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span>Another</span></button>
+  </div>
+  <p id="wpMsg" class="bkmsg" role="status"></p>
+</div>
+<div id="bkPop" class="bkpop" hidden role="dialog" aria-label="Back up">
+  <div class="bkrow">
+    <button type="button" id="bkFile" class="bkb" title="Download a backup file to this computer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Save file</span></button>
+    <button type="button" id="bkHook" class="bkb" title="Send a backup to your Discord channel now"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/></svg><span>Discord</span></button>
+  </div>
+  <p id="bkMsg" class="bkmsg" role="status"></p>
+</div>
+<div id="undo" class="toast" hidden role="status"><span id="undoMsg"></span><button type="button" id="undoBtn" class="pill solid">Undo</button></div>
+<div id="nudge" class="nudge" hidden role="status"><span>Export a backup?</span><button type="button" id="nudgeGo" class="pill solid">Export</button><button type="button" id="nudgeLater" class="pill">Later</button></div>
+<div id="settings" class="settings" hidden role="dialog" aria-label="Settings">
+  <h2>Preferences</h2>
+  <label class="prefrow"><span>City</span><select id="prefCity" class="pill" aria-label="City for sunrise and sunset"></select></label>
+  <div class="prefrow"><span>Clock style</span><span class="seg" id="prefClockStyle" role="group" aria-label="Clock style"><button data-v="solid">Solid</button><button data-v="thin">Thin</button><button data-v="frosted">Frosted</button></span></div>
+  <div class="prefrow"><span>Clock</span><span class="seg" id="prefClock" role="group" aria-label="Clock"><button data-v="24">24h</button><button data-v="12">12h</button></span></div>
+  <div class="prefrow"><span>Background</span><span class="seg" id="prefArt" role="group" aria-label="Background"><button data-v="paintings">Art</button><button data-v="photos">Nature</button><button data-v="both">Art + Nature</button></span></div>
+  <div class="prefrow"><span>Time rings on the main page</span><span class="seg" id="prefRings" role="group" aria-label="Time rings"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span>Fresh paintings each week</span><span class="seg" id="prefFresh" role="group" aria-label="Fresh paintings each week"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span>Open the day on the first morning tab</span><span class="seg" id="prefOpenDay" role="group" aria-label="Open the day on the first morning tab"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span>Golden-hour nudge</span><span class="seg" id="prefGolden" role="group" aria-label="Golden-hour nudge"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span>Weather on the background</span><span class="seg" id="prefWx" role="group" aria-label="Weather on the background"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <h2>Your data</h2>
+  <p class="hint">Everything lives in this browser. Export a backup now and then, and import it anywhere.</p>
+  <div class="opts"><button type="button" id="exportBtn" class="pill solid">Export backup</button><button type="button" id="importBtn" class="pill">Import…</button></div>
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
+  <div id="importBox" class="importbox" hidden>
+    <p id="importInfo"></p>
+    <div class="opts"><button type="button" id="impMerge" class="pill solid">Merge</button><button type="button" id="impReplace" class="pill">Replace everything</button><button type="button" id="impCancel" class="pill">Cancel</button></div>
+    <p class="hint">Merge keeps what you have and adds what is new. Replace swaps it all for the file.</p>
+  </div>
+  <p id="setMsg" class="hint" role="status"></p>
+  <p id="backupInfo" class="hint"></p>
+  <h2>Automatic backup</h2>
+  <p class="hint">Once a day, if anything changed, a backup file is posted to your own Discord channel. In Discord: channel settings, Integrations, Webhooks, New webhook, Copy URL. This sends your tasks and notes to Discord, so use a private channel.</p>
+  <input id="hookUrl" class="hookin" type="password" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false" aria-label="Discord webhook URL">
+  <div class="opts"><button type="button" id="hookOn" class="pill solid">Turn on</button><button type="button" id="hookNow" class="pill">Send now</button><button type="button" id="hookOff" class="pill">Remove</button></div>
+  <p id="hookMsg" class="hint" role="status"></p>
+  <h2>Recover</h2>
+  <p class="hint">Deleted notes and tasks stay here for 30 days.</p>
+  <ul id="trashList" class="rlist"></ul>
+  <p class="hint">A snapshot is saved at the first open of each day. Restoring only brings back what is missing now.</p>
+  <ul id="snapList" class="rlist"></ul>
+  <h2>Your days</h2>
+  <p class="hint">Each finished task adds a brushstroke to the day's painting.</p>
+  <div class="opts"><button type="button" id="daysBtn" class="pill">See your days</button></div>
+  <h2>Quick capture</h2>
+  <p class="hint">Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> on any tab to jot a task without leaving the page. Change the keys at chrome://extensions/shortcuts.</p>
+</div>
+
+<header class="nav">
+  <select id="switch" class="pill switch" aria-label="Project"></select>
+  <nav id="links" class="links" aria-label="Pinned shortcuts"></nav>
+  <button id="mtgBtn" class="pill" title="Meeting notes and tasks  (M)">Meeting</button>
+  <button id="notesBtn" class="pill" aria-expanded="false" aria-controls="notesPanel" title="Notes  (N)">Notes</button>
+  <form id="search" class="search" autocomplete="off">
+    <input id="q" type="text" placeholder="Search, jump, or run anything" aria-label="Search or jump" role="combobox" aria-expanded="false">
+    <kbd>/</kbd>
+    <ul id="results" class="results" role="listbox" hidden></ul>
+  </form>
+</header>
+
+<main class="shell">
+  <section class="hero">
+    <div class="hl">
+    <div class="timerow">
+    <p id="clock" class="clock mono" aria-label="Current time"></p>
+    <figure id="sun" class="sun" role="img" aria-label="Daylight">
+      <svg viewBox="0 0 240 88" aria-hidden="true">
+        <path class="track" d="M12 68 A108 56 0 0 1 228 68" fill="none"/>
+        <path id="sunDone" class="done" d="M12 68 A108 56 0 0 1 228 68" fill="none" pathLength="1" stroke-dasharray="0 1"/>
+        <line class="horizon" x1="0" y1="68" x2="240" y2="68"/>
+        <g id="sunIcon" class="sunicon" transform="translate(12 68)"><circle r="5.5" fill="currentColor"/><path d="M0-10v-3M0 10v3M-10 0h-3M10 0h3M-7-7l-2.1-2.1M7 7l2.1 2.1M-7 7l-2.1 2.1M7-7l2.1-2.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+      </svg>
+      <figcaption>
+        <span><small>Sunrise</small><b id="sunRise" class="mono"></b></span>
+        <p id="sunLeft"></p>
+        <span class="r"><small>Sunset</small><b id="sunSet" class="mono"></b></span>
+      </figcaption>
+    </figure>
+    <div class="sub">
+    <p id="date" class="eyebrow"></p>
+    <div class="weekrow" id="weekRow" role="button" tabindex="0" title="Open the calendar  (C)" aria-label="Open the calendar">
+      <ol id="week" class="week" aria-label="This week"></ol>
+    </div>
+    <h1 id="greet"></h1>
+    <button type="button" id="intent" class="intent" hidden title="Your intention for today. Click to change it."></button>
+    </div>
+    <figure class="paintfig" id="paintFig">
+      <button type="button" id="paintBtn" class="paintcorner" title="Today's painting"><canvas id="paintCanvas" aria-hidden="true"></canvas></button>
+      <button type="button" id="paintHide" class="phide" aria-label="Hide this painting" title="Hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A9.7 9.7 0 0 1 12 5c5 0 8.5 4.2 9.7 7a11.6 11.6 0 0 1-2.6 3.7M6.6 6.6A11.7 11.7 0 0 0 2.3 12c1.2 2.8 4.7 7 9.7 7a9.5 9.5 0 0 0 4.4-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>
+      <figcaption id="paintCap"></figcaption>
+      <button type="button" id="paintShow" class="pshow" aria-label="Show the painting">Show painting</button>
+    </figure>
+    </div>
+    </div>
+    <div class="hr">
+    <button type="button" id="rings" class="rings" hidden title="Open the weeks view  (W)" aria-label="Time passing: day, week, month and year"></button>
+    <div id="wind" class="wind" hidden>
+      <h2>Winding down</h2>
+      <p id="windMsg"></p><p id="windSub" class="sub"></p>
+      <div class="opts"><button type="button" id="windWrap" class="pill solid">Wrap up the day</button><button type="button" id="windNotes" class="pill">Empty your head into Notes</button><button type="button" id="windX" class="pill">Not yet</button></div>
+    </div>
+    <div class="focus"><h2>What matters today <span id="fmsg" role="status"></span></h2><ul id="focus"></ul></div>
+    <figure class="quote">
+      <blockquote id="quote"></blockquote>
+      <figcaption id="author"></figcaption>
+    </figure>
+    </div>
+  </section>
+
+  <section class="main" aria-label="Tasks">
+    <form id="add" class="add">
+      <label class="sr" for="title">New task</label>
+      <input id="title" type="text" placeholder="Add a task   —   try  Ship report #client !1" maxlength="160" required>
+      <div class="opts">
+        <button type="button" id="pri" class="pill" title="Priority">P2</button>
+        <select id="proj" class="pill" aria-label="Project"></select>
+        <button class="pill solid" type="submit">Add</button>
+      </div>
+      <div class="whens">
+      <div class="opts when" id="dueRow"><span class="lab">Due</span>
+        <button type="button" class="pill" data-due="0">Today</button>
+        <button type="button" class="pill" data-due="1">Tomorrow</button>
+        <button type="button" class="pill" data-due="7">Next week</button>
+        <button type="button" class="pill" id="dueP">Pick date</button>
+        <input id="due" type="date" class="ghost" tabindex="-1" aria-label="Due date"></div>
+      <div class="opts when" id="remRow"><span class="lab">Remind</span>
+        <button type="button" class="pill" data-rem="h1">In 1 hour</button>
+        <button type="button" class="pill" data-rem="h3">In 3 hours</button>
+        <button type="button" class="pill" data-rem="t9">Tomorrow 9:00</button>
+        <button type="button" class="pill" id="remP">Pick time</button>
+        <input id="rem" type="datetime-local" class="ghost" tabindex="-1" aria-label="Reminder time"></div>
+      </div>
+      <p id="err" class="err" role="alert" hidden></p>
+    </form>
+    <div class="bar"><div class="tabs" id="views" role="group" aria-label="Show"></div><div id="filters" class="filters"></div><button type="button" id="wrapBtn" class="pill sortbtn" title="Wrap up the day  (E)">Wrap up the day</button><button type="button" id="sortBtn" class="pill" title="Sort my head  (T)">Sort my head</button></div>
+    <div id="cols" class="cols"></div>
+    <p class="qnlabel">Quick navigation</p>
+    <nav id="dock" class="dock" aria-label="Quick navigation"></nav>
+
+<section id="notesPanel" class="notes" hidden aria-label="Notes">
+  <header><h2>Notes</h2><span class="tools">
+    <span class="seg" id="nModes" role="group" aria-label="View"><button data-m="edit">Edit</button><button data-m="preview">Preview</button><button data-m="split" id="mSplit" hidden>Split</button></span>
+    <button id="nSavedBtn" class="pill" aria-expanded="true" title="Show or hide the list of notes">Notes list <span id="nCount" class="mono">0</span></button><button id="nFull" class="vt" aria-label="Full screen" aria-pressed="false" title="Full screen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button><button id="notesX" class="x" aria-label="Close notes" style="opacity:1">×</button></span></header>
+    <div class="nbody">
+    <div id="nlist" class="nlist">
+      <div class="nlh"><span>Saved <b id="nCount2" class="mono"></b></span><button type="button" id="nNew" class="pill">+ New</button><button type="button" id="nOnly" class="pill" hidden></button></div>
+      <ul id="nitems"></ul>
+    </div>
+    <div id="neditor" class="pad">
+      <div class="tb" role="toolbar" aria-label="Formatting">
+        <button type="button" data-f="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button type="button" data-f="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button type="button" data-f="h" title="Heading">H</button>
+        <button type="button" data-f="ul" title="Bullet list">List</button>
+        <button type="button" data-f="task" title="Checklist">Task</button>
+        <button type="button" data-f="quote" title="Quote">Quote</button>
+        <button type="button" data-f="code" title="Code">Code</button>
+        <button type="button" data-f="link" title="Link (Ctrl+K)">Link</button>
+      </div>
+      <div class="nwrap one">
+        <label class="sr" for="notes">Scratchpad</label>
+        <textarea id="notes" spellcheck="false" placeholder="Jot anything. Markdown works: # heading, **bold**, - list, - [ ] task, `code`.&#10;&#10;Lines like  [ ] Send deck to Priya #client !1  can become tasks."></textarea>
+        <div id="preview" class="preview" hidden></div>
+      </div>
+      <div class="opts">
+        <button type="button" class="pill" id="mtg" title="Meeting notes and tasks  (M)">Meeting view</button>
+        <button type="button" class="pill" id="copy">Copy</button>
+        <button type="button" class="pill" id="nSave">Save note</button>
+        <span id="saved" class="lab" role="status">Saved</span>
+        <button type="button" class="pill solid" id="extract">Extract actions</button>
+      </div>
+    </div>
+    </div>
+</section>
+  </section>
+
+  <aside class="side">
+    <div class="stat">
+      <span class="mono" id="sOpen">0</span><small>open</small>
+      <span class="mono" id="sDue">0</span><small>for today</small>
+      <span class="mono" id="sLate">0</span><small>carried over</small>
+    </div>
+    <h2>Projects</h2>
+    <ul id="projects" class="projects"></ul>
+    <form id="addProj" class="inline">
+      <input id="pname" type="text" placeholder="New project" maxlength="24" aria-label="New project name">
+    </form>
+    <p id="perr" class="err" role="alert" hidden></p>
+    <h2 id="spHead" class="row"><span id="spTitle">Shortcuts</span><span class="tools">
+      <button id="vList" class="vt" aria-label="List view" title="List"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <button id="vGrid" class="vt" aria-label="Grid view" title="Grid"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></button>
+      <button id="spAdd" class="plus" aria-label="Add shortcut" aria-expanded="false">+</button></span></h2>
+    <form id="spForm" class="spform" hidden>
+      <label class="sr" for="spUrl">Link</label><input id="spUrl" type="text" placeholder="Paste a link" required>
+      <label class="sr" for="spName">Name</label><input id="spName" type="text" placeholder="Name (optional)" maxlength="32">
+      <div class="opts"><select id="spProj" class="pill" aria-label="Project"></select><button id="spSave" class="pill solid" type="submit">Save</button></div>
+      <p id="spErr" class="err" role="alert" hidden></p>
+    </form>
+    <ul id="shortcuts" class="shortcuts"></ul>
+  </aside>
+</main>
+<p class="zenhint" aria-hidden="true">Press F to leave focus</p>
+<div id="sort" class="sort" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Sort my head">
+  <button type="button" id="sortX" class="sortx" aria-label="Close">×</button>
+  <p class="sorthead">Sort my head</p>
+  <span class="sdir" data-k="today" aria-hidden="true">Today</span>
+  <span class="sdir" data-k="drop" aria-hidden="true">Let go</span>
+  <span class="sdir" data-k="later" aria-hidden="true">Later</span>
+  <span class="sdir" data-k="wait" aria-hidden="true">Waiting</span>
+  <div id="sortStage" class="sstage"></div>
+  <form id="sortWait" class="swait" hidden>
+    <label class="sr" for="sw">Waiting on</label>
+    <input id="sw" type="text" list="sortPeople" placeholder="Waiting on whom?" maxlength="30" autocomplete="off" required>
+    <datalist id="sortPeople"></datalist>
+    <button class="pill solid" type="submit">Add</button><button type="button" id="swBack" class="pill">Back</button>
+  </form>
+  <div id="sortActions" class="sactions">
+    <button type="button" data-sa="drop"><kbd>4</kbd>Let go</button>
+    <button type="button" data-sa="later"><kbd>2</kbd>Later</button>
+    <button type="button" data-sa="wait"><kbd>3</kbd>Waiting</button>
+    <button type="button" data-sa="today" class="main"><kbd>1</kbd>Today</button>
+    <button type="button" data-sa="skip" class="quiet">Skip</button>
+  </div>
+  <p id="sortKeys" class="skeys">drag the card, or use the arrow keys  ·  space to skip  ·  backspace to undo</p>
+</div>
+<div id="lb" class="ritual lb" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Painting">
+  <button type="button" id="lbX" class="sortx" aria-label="Close">×</button>
+  <button type="button" id="lbPrev" class="lbnav lbl" aria-label="Earlier day">‹</button>
+  <button type="button" id="lbNext" class="lbnav lbr" aria-label="Later day">›</button>
+  <div id="lbFrame" class="lbframe"><img id="lbImg" alt=""><canvas id="lbMist" aria-hidden="true"></canvas></div>
+  <div class="lbcap"><b id="lbTitle"></b><small id="lbMeta"></small></div>
+  <div class="lbbar"><button type="button" id="lbMistBtn" class="pill">Show my day</button><button type="button" id="lbFull" class="pill solid">Full screen</button><button type="button" id="lbDays" class="pill">Your days</button></div>
+</div>
+<div id="days" class="ritual days" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Your days">
+  <button type="button" id="daysX" class="sortx" aria-label="Close">×</button>
+  <h2 class="rtitle">Your days</h2>
+  <div id="daysGrid" class="dgrid"></div>
+</div>
+<div id="wrap" class="ritual" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Wrap up the day">
+  <button type="button" id="wrapX" class="sortx" aria-label="Close">×</button>
+  <p class="sorthead">Wrap up the day</p>
+  <div class="rdots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <section class="rstep" data-s="1">
+    <h2 class="rtitle">Tomorrow's one thing</h2>
+    <p class="rsub">If tomorrow only gets one thing, what should it be?</p>
+    <ul id="wrapPick" class="rpick"></ul>
+    <input id="wrapNew" type="text" maxlength="120" placeholder="Or write something new…" autocomplete="off">
+    <div class="ractions"><button type="button" class="pill" data-r="skip">Nothing in particular</button><button type="button" class="pill solid" data-r="next">Next</button></div>
+  </section>
+  <section class="rstep" data-s="2" hidden>
+    <h2 class="rtitle">Leave it here</h2>
+    <p class="rsub">Anything still circling? Write it down and let it rest.</p>
+    <textarea id="wrapDump" spellcheck="false" placeholder="Whatever is on your mind…"></textarea>
+    <small class="rnote">Lines starting with [ ] become tomorrow's tasks. The rest is saved as a note.</small>
+    <div class="ractions"><button type="button" class="pill" data-r="back">Back</button><button type="button" class="pill" data-r="skip">Nothing else</button><button type="button" class="pill solid" data-r="next">Next</button></div>
+  </section>
+  <section class="rstep" data-s="3" hidden>
+    <h2 class="rtitle">That is the day.</h2>
+    <canvas id="wrapCanvas" class="wcv" aria-hidden="true"></canvas>
+    <p id="wrapSum" class="rsub"></p>
+    <div class="ractions"><button type="button" class="pill" data-r="back">Back</button><button type="button" id="wrapGo" class="pill solid" data-r="go">Done for today</button></div>
+  </section>
+</div>
+<div id="mtgv" class="mtg" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Meeting">
+  <header class="mth">
+    <input id="mtTitle" class="mttitle" type="text" maxlength="80" placeholder="Meeting title" autocomplete="off" aria-label="Meeting title">
+    <input id="mtWith" class="mtwith" type="text" maxlength="80" placeholder="With…" autocomplete="off" aria-label="Who is in the meeting">
+    <select id="mtProj" class="pill" aria-label="Project"></select>
+    <span class="seg mtseg" id="mtTabs" role="group" aria-label="Pane"><button data-p="notes" aria-pressed="true">Notes</button><button data-p="tasks" aria-pressed="false">Tasks <b id="mtCount" class="mono"></b></button></span>
+    <button type="button" id="mtDiscard" class="pill" title="Throw this meeting away (kept in Recover for 30 days)">Discard</button>
+    <button type="button" id="mtEnd" class="pill solid">End and save</button>
+    <button type="button" id="mtX" class="sortx mtx" aria-label="Hide meeting (keeps running)" title="Hide (keeps running)">×</button>
+  </header>
+  <div class="mtbody" data-p="notes">
+    <section class="mtnotes">
+      <div class="mtq"><button type="button" data-ins="- [ ] ">+ Action</button><button type="button" data-ins="**Decision:** ">+ Decision</button><button type="button" data-ins="**Question:** ">+ Question</button><button type="button" data-ins="## ">+ Heading</button><small>Lines starting with <code>[ ]</code> or <code>todo:</code> become tasks. <code>@name</code> marks who you are waiting on.</small></div>
+      <textarea id="mtText" spellcheck="false" placeholder="Take notes here…&#10;&#10;- [ ] Send the deck to Priya #client !1&#10;- [ ] Follow up on the release @Ravi"></textarea>
+    </section>
+    <aside class="mttasks" aria-label="Tasks">
+      <div class="mtsec"><h3>Action items <b id="mtN" class="mono"></b></h3>
+        <span class="seg" id="mtDue" role="group" aria-label="Due"><button data-d="today" aria-pressed="true">Today</button><button data-d="tomorrow" aria-pressed="false">Tomorrow</button><button data-d="week" aria-pressed="false">Next week</button></span></div>
+      <ul id="mtActs" class="mtlist"></ul>
+      <input id="mtAdd" class="mtadd" type="text" maxlength="140" placeholder="Add an action…  @who #tag !1" autocomplete="off" aria-label="Add an action item">
+      <div class="mtsec"><h3>Added from this meeting</h3></div>
+      <ul id="mtMade" class="mtlist"></ul>
+      <div class="mtsec"><h3 id="mtOpenH">Open tasks</h3></div>
+      <ul id="mtOpen" class="mtlist"></ul>
+    </aside>
+  </div>
+</div>
+<div id="pal" class="pal" hidden role="dialog" aria-modal="true" aria-label="Spotlight search">
+  <div class="palbox">
+    <input id="palQ" type="text" placeholder="Search, run a command, or type a task to add…" autocomplete="off" spellcheck="false" role="combobox" aria-controls="palList" aria-expanded="true" aria-label="Spotlight search">
+    <ul id="palList" class="pallist" role="listbox"></ul>
+    <p class="palfoot"><span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>↵</kbd> run</span><span><kbd>Ctrl</kbd><kbd>↵</kbd> new tab</span><span><kbd>Esc</kbd> close</span></p>
+  </div>
+</div>
+<div id="breath" class="ritual" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="One minute breath">
+  <button type="button" id="breathX" class="sortx" aria-label="Close">×</button>
+  <div class="obreath" aria-hidden="true"></div>
+  <p class="rsub obtext" aria-live="off"><span class="oin">Breathe in…</span><span class="oout">…and slowly out.</span></p>
+  <p class="rsub" id="breathLeft"></p>
+</div>
+<div id="openday" class="ritual" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Open the day">
+  <button type="button" id="openX" class="sortx" aria-label="Close">×</button>
+  <p class="sorthead">Open the day</p>
+  <div class="rdots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <section class="rstep" data-s="1">
+    <h2 class="rtitle" id="oGreet">Good morning.</h2>
+    <div class="obreath" aria-hidden="true"></div>
+    <p class="rsub obtext" aria-live="off"><span class="oin">Breathe in…</span><span class="oout">…and slowly out.</span></p>
+    <div class="ractions"><button type="button" class="pill" data-o="skip">Skip</button><button type="button" class="pill solid olate" data-o="next">I am here</button></div>
+  </section>
+  <section class="rstep" data-s="2" hidden>
+    <h2 class="rtitle">What would make today feel good?</h2>
+    <p class="rsub">One line is enough. It stays under your greeting all day.</p>
+    <input id="oIntent" type="text" maxlength="90" placeholder="Steady progress, and a proper lunch…" autocomplete="off">
+    <div class="ractions"><button type="button" class="pill" data-o="back">Back</button><button type="button" class="pill solid" data-o="next">Next</button></div>
+  </section>
+  <section class="rstep" data-s="3" hidden>
+    <h2 class="rtitle">Your one thing</h2>
+    <p class="rsub">If only one thing gets done today, what should it be?</p>
+    <ul id="oPick" class="rpick"></ul>
+    <input id="oNew" type="text" maxlength="120" placeholder="Or write something new…" autocomplete="off">
+    <p id="oGold" class="rnote"></p>
+    <div class="ractions"><button type="button" class="pill" data-o="back">Back</button><button type="button" class="pill" data-o="skip3">Nothing in particular</button><button type="button" class="pill solid" data-o="go">Begin the day</button></div>
+  </section>
+</div>
+<p id="lookCap" class="lookcap" aria-live="polite"></p>
+<div id="timev" class="ritual timev" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Time">
+  <button type="button" id="timeX" class="sortx" aria-label="Close">×</button>
+  <p class="sorthead">Time</p>
+  <span class="seg" id="tTabs" role="group" aria-label="View"><button data-t="life">Life in weeks</button><button data-t="year">This year</button></span>
+  <h2 class="rtitle" id="tTitle"></h2>
+  <p class="rsub" id="tSub"></p>
+  <form id="tSetup" class="tsetup" hidden>
+    <label class="sr" for="tBirth">Date of birth</label><input id="tBirth" type="date" required>
+    <span class="seg" id="tSpan" role="group" aria-label="Span to show"><button type="button" data-y="70">70 years</button><button type="button" data-y="80">80 years</button><button type="button" data-y="90">90 years</button></span>
+    <button type="submit" class="pill solid">Show my weeks</button>
+    <small class="rnote">Kept only in this browser. Never sent anywhere, and left out of backups.</small>
+  </form>
+  <div id="tWrap" class="twrap"><canvas id="tCv"></canvas><i id="tNow" class="tnow" hidden></i><div id="tTip" class="ttip" hidden></div></div>
+  <p class="rnote" id="tNote"></p>
+</div>
+<div id="cal" class="ritual calv" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Calendar">
+  <button type="button" id="calX" class="sortx" aria-label="Close">×</button>
+  <div class="calhead">
+    <button type="button" id="calPrev" class="calnav" aria-label="Previous month">‹</button>
+    <h2 id="calTitle" class="caltitle" aria-live="polite"></h2>
+    <button type="button" id="calNext" class="calnav" aria-label="Next month">›</button>
+    <button type="button" id="calToday" class="pill">Today</button>
+  </div>
+  <div class="calbody">
+    <div id="calGrid" class="calgrid" role="grid" aria-label="Month"></div>
+    <aside class="calside" aria-label="Day and festivals">
+      <h3 id="calDayH"></h3>
+      <ul id="calDay" class="callist"></ul>
+      <h3 id="calMonthH">Festivals this month</h3>
+      <ul id="calMonth" class="callist"></ul>
+      <p id="calSrc" class="calsrc"></p>
+    </aside>
+  </div>
+</div>
+<div id="rest" class="rest" hidden aria-live="polite">
+  <div class="rsun"></div><div class="rground"></div>
+  <div class="rtext"><p class="rbig">Rest well.</p><p class="rsmall">It is all here tomorrow.</p></div>
+  <p class="rwake">press any key to come back</p>
+</div>
+<script src="shim.js"></script>
+<script src="newtab.js"></script>
+</body>
+</html>
