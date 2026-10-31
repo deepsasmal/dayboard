@@ -263,6 +263,75 @@ function goldenSchedule(set) {
   const when = set - 18e5, key = `${prefs.golden}:${when}`; if (key === goldenKey) return; goldenKey = key;
   chrome.alarms.clear("golden"); if (prefs.golden !== "off" && when > Date.now()) chrome.alarms.create("golden", { when });
 }
+/* ---------- moon: phase, rise and set, next phases. Standard low-precision lunar series, computed on the device (good to a few minutes), no network ---------- */
+const MR = Math.PI / 180, MJD = (ms) => ms / 864e5 - .5 + 2440588 - 2451545; // days since J2000
+const mRA = (l, b) => Math.atan2(Math.sin(l) * Math.cos(MR * 23.4397) - Math.tan(b) * Math.sin(MR * 23.4397), Math.cos(l));
+const mDec = (l, b) => Math.asin(Math.sin(b) * Math.cos(MR * 23.4397) + Math.cos(b) * Math.sin(MR * 23.4397) * Math.sin(l));
+function moonC(d) { // geocentric moon: longitude with the main perturbation terms (Meeus), latitude, distance in km
+  const T = d / 36525, s = Math.sin, c = Math.cos, L = MR * (218.3164477 + 481267.88123421 * T), D = MR * (297.8501921 + 445267.1114034 * T), M = MR * (357.5291092 + 35999.0502909 * T), Mp = MR * (134.9633964 + 477198.8675055 * T), F = MR * (93.272095 + 483202.0175233 * T);
+  const l = L + MR * (6.288774 * s(Mp) + 1.274027 * s(2 * D - Mp) + .658314 * s(2 * D) + .213618 * s(2 * Mp) - .185116 * s(M) - .114332 * s(2 * F) + .058793 * s(2 * D - 2 * Mp) + .057066 * s(2 * D - M - Mp) + .053322 * s(2 * D + Mp) + .045758 * s(2 * D - M));
+  const b = MR * (5.128122 * s(F) + .280602 * s(Mp + F) + .277693 * s(Mp - F) + .173237 * s(2 * D - F));
+  return { ra: mRA(l, b), dec: mDec(l, b), dist: 385000.56 - 20905.355 * c(Mp) - 3699.111 * c(2 * D - Mp) - 2955.968 * c(2 * D) - 569.925 * c(2 * Mp), lon: l };
+}
+function sunC(d) { const M = MR * (357.5291 + 0.98560028 * d), C = MR * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)), L = M + C + MR * 102.9372 + Math.PI; return { ra: mRA(L, 0), dec: mDec(L, 0), lon: L }; }
+const elong = (ms) => { const d = MJD(ms); return ((((moonC(d).lon - sunC(d).lon) / (2 * Math.PI)) % 1) + 1) % 1; }; // 0 new, .25 first quarter, .5 full, .75 last quarter
+function moonPhase(ms) { const p = elong(ms); return { f: (1 - Math.cos(2 * Math.PI * p)) / 2, p }; } // f = lit fraction 0..1
+function moonAlt(ms) { // altitude (radians, with refraction) above the chosen city's horizon
+  const P = place(), phi = MR * P.lat, d = MJD(ms), c = moonC(d), H = MR * (280.16 + 360.9856235 * d) - MR * -P.lon - c.ra;
+  const h = Math.asin(Math.sin(phi) * Math.sin(c.dec) + Math.cos(phi) * Math.cos(c.dec) * Math.cos(H)), hh = Math.max(h, 0);
+  return h + .0002967 / Math.tan(hh + .00312536 / (hh + .08901179));
+}
+let moonCache = { k: 0 };
+function moonDay(now) { // rises and sets from a day ago to a day and a half ahead, so "now" always has a last and a next
+  const k = Math.floor(now / 3e5), P = place().name; if (moonCache.k === k && moonCache.c === P) return moonCache.v;
+  const hc = MR * .133, step = 6e5, rises = [], sets = []; let prev = moonAlt(now - 864e5) - hc;
+  for (let t = now - 864e5 + step; t <= now + 36 * 36e5; t += step) { const a = moonAlt(t) - hc; if (prev < 0 && a >= 0) rises.push(t - step + step * -prev / (a - prev)); else if (prev >= 0 && a < 0) sets.push(t - step + step * prev / (prev - a)); prev = a; }
+  const up = moonAlt(now) >= hc, v = { up, lastRise: rises.filter((x) => x <= now).pop() ?? null, nextRise: rises.find((x) => x > now) ?? null, nextSet: sets.find((x) => x > now) ?? null };
+  v.setAfterRise = v.nextRise ? sets.find((x) => x > v.nextRise) ?? null : null; moonCache = { k, c: P, v }; return v;
+}
+function nextPhase(target, from) { // when the moon next reaches 0 / .25 / .5 / .75 of its way round, by ecliptic longitude (how new and full moon are defined)
+  const g = (t) => ((elong(t) - target + 1.5) % 1) - .5;  let a = from, ga = g(a);
+  for (let t = from + 6 * 36e5; t < from + 32 * 864e5; t += 6 * 36e5) { const gb = g(t); if (ga < 0 && gb >= 0) { let lo = t - 6 * 36e5, hi = t; for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (g(mid) < 0) lo = mid; else hi = mid; } return hi; } ga = gb; }
+  return null;
+}
+const PHASES = [[.03, "New moon"], [.22, "Waxing crescent"], [.28, "First quarter"], [.47, "Waxing gibbous"], [.53, "Full moon"], [.72, "Waning gibbous"], [.78, "Last quarter"], [.97, "Waning crescent"], [1.01, "New moon"]];
+const phaseName = (p) => PHASES.find(([x]) => p < x)[1];
+function moonG(p, r, flip) { // a moon of radius r centred on 0,0; the terminator is an ellipse
+  const k = Math.cos(2 * Math.PI * p), rx = Math.abs(k) * r, wax = p < .5, sw = wax ? (k > 0 ? 0 : 1) : (k > 0 ? 1 : 0);
+  const lit = p < .012 || p > .988 ? "" : `<path d="M0 ${-r}A${r} ${r} 0 0 ${wax ? 1 : 0} 0 ${r}A${rx.toFixed(2)} ${r} 0 0 ${sw} 0 ${-r}Z" fill="currentColor"/>`;
+  return `<g${flip ? ' transform="scale(-1 1)"' : ""}><circle r="${r}" fill="rgba(255,255,255,.07)" stroke="currentColor" stroke-opacity=".42"/>${lit}</g>`;
+}
+let sunMarkup = null, iconKey = "";
+function renderMoonIcon(night, now) { // after sunset the moon takes the sun's place on the arc, riding it from its real moonrise to moonset
+  const icon = $("#sunIcon"); sunMarkup ??= icon.innerHTML;
+  const { f, p } = moonPhase(now), flip = place().lat < 0, ph = Math.round(p * 300) + (flip ? "f" : "");
+  if (iconKey !== "b" + ph) { $("#moonBtn svg").innerHTML = `<g transform="translate(11 11)">${moonG(p, 8, flip)}</g>`; iconKey = "b" + ph; }
+  if (!night) { if (icon.dataset.m) { icon.innerHTML = sunMarkup; delete icon.dataset.m; } return; }
+  if (icon.dataset.m !== ph) { icon.innerHTML = moonG(p, 9.5, flip); icon.dataset.m = ph; }
+  const md = moonDay(now), pos = md.up && md.lastRise && md.nextSet ? Math.min(1, Math.max(0, (now - md.lastRise) / (md.nextSet - md.lastRise))) : 0;
+  $("#sunDone").setAttribute("stroke-dasharray", `${md.up ? pos : 0} 1`);
+  icon.setAttribute("transform", `translate(${120 - 108 * Math.cos(Math.PI * pos)} ${68 - 56 * Math.sin(Math.PI * pos)})`);
+  $("#sun").classList.toggle("parked", !md.up);
+  $("#sunLeft").textContent = !md.up && md.nextRise ? `${phaseName(p)} · rises ${hhmm(md.nextRise)}` : `${phaseName(p)} · ${Math.round(f * 100)}%`;
+}
+const dayTag = (ms) => { const k = (t) => new Date(t).toLocaleDateString("en-CA", { timeZone: place().tz }), n = Date.now(); return k(ms) === k(n) ? "" : k(ms) === k(n + 864e5) ? " tomorrow" : k(ms) === k(n - 864e5) ? " yesterday" : ""; };
+function drawMoon() {
+  const now = Date.now(), { f, p } = moonPhase(now), flip = place().lat < 0, md = moonDay(now);
+  const rise = md.up ? md.lastRise : md.nextRise, set = md.up ? md.nextSet : md.setAfterRise;
+  const nx = [[0, "New moon"], [.25, "First quarter"], [.5, "Full moon"], [.75, "Last quarter"]].map(([t, n]) => [n, nextPhase(t, now)]).filter((x) => x[1]).sort((a, b) => a[1] - b[1]);
+  const when = (t) => { const d = Math.round((t - now) / 864e5); return d <= 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`; };
+  const week = [...Array(7)].map((_, i) => { const t = new Date(); t.setHours(12, 0, 0, 0); t.setDate(t.getDate() + i); return `<span class="${i ? "" : "now"}"><svg viewBox="-9 -9 18 18" width="22" height="22" aria-hidden="true">${moonG(moonPhase(t.getTime()).p, 7, flip)}</svg><small>${i ? t.toLocaleDateString(undefined, { weekday: "short" }) : "Today"}</small></span>`; }).join("");
+  $("#moonPop").innerHTML = `<div class="mphead"><svg viewBox="-30 -30 60 60" width="84" height="84" aria-hidden="true">${moonG(p, 25, flip)}</svg><div><h3>${phaseName(p)}</h3><p>${Math.round(f * 100)}% lit · ${(p * 29.530588).toFixed(0)} days old</p></div></div>`
+    + `<div class="mprow"><span><small>Moonrise</small><b class="mono">${rise ? hhmm(rise) + `<i>${dayTag(rise)}</i>` : "–"}</b></span><span class="r"><small>Moonset</small><b class="mono">${set ? hhmm(set) + `<i>${dayTag(set)}</i>` : "–"}</b></span></div>`
+    + `<ul class="mpnext">${nx.map(([n, t]) => `<li><span>${n}</span><b>${new Date(t).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</b><small>${when(t)}</small></li>`).join("")}</ul>`
+    + `<div class="mpweek" aria-label="The week ahead">${week}</div><p class="mpnote">Worked out on your device for ${esc(place().name)}. Rise and set are good to a few minutes, phase dates to about an hour.</p>`;
+}
+function moonToggle(on = $("#moonPop").hidden) { if (on) drawMoon(); $("#moonPop").hidden = !on; $("#moonBtn").setAttribute("aria-expanded", on); }
+$("#moonBtn").onclick = (e) => { e.stopPropagation(); moonToggle(); };
+$("#sun svg").onclick = () => { if ($("#sun").classList.contains("night")) moonToggle(); };
+document.addEventListener("click", (e) => { if (!$("#moonPop").hidden && !e.target.closest("#moonPop, #moonBtn, #sun svg")) moonToggle(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#moonPop").hidden) { moonToggle(false); $("#moonBtn").focus(); } });
+setInterval(() => { if (!$("#moonPop").hidden) drawMoon(); }, 6e4);
 function renderSun() {
   const now = Date.now(), [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: place().tz }).format(now).split("-").map(Number);
   const [rise, set] = sunTimes(y, m - 1, d);
@@ -276,8 +345,8 @@ function renderSun() {
   $("#sunDone").setAttribute("stroke-dasharray", `${f ?? 0} 1`);
   $("#sunIcon").setAttribute("transform", `translate(${120 - 108 * Math.cos(Math.PI * pos)} ${68 - 56 * Math.sin(Math.PI * pos)})`);
   $("#sunIcon").style.color = f === null ? "" : sunColor(f);
-  $("#sun").classList.toggle("night", f === null); renderLight(f, pos);
-  $("#sun").setAttribute("aria-label", `${place().name}: sunrise ${hhmm(rise)}, sunset ${hhmm(set)}. ${text}.`);
+  $("#sun").classList.toggle("night", f === null); renderLight(f, pos); renderMoonIcon(f === null, now);
+  $("#sun").setAttribute("aria-label", `${place().name}: sunrise ${hhmm(rise)}, sunset ${hhmm(set)}. ${$("#sunLeft").textContent}.`);
 }
 function renderWeek() { // Monday to Sunday of the current week
   const now = new Date(), mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
@@ -1785,6 +1854,7 @@ const palCmds = () => [
   ["Calm mode", "calm quiet fade", "Z", () => setCalm(!isCalm())],
   ["Life in weeks", "time life weeks dots years lived remaining mortality", "W", () => setTimeout(() => openTime("life"), 60)],
   ["Year in dots", "time year days dots left progress", "", () => setTimeout(() => openTime("year"), 60)],
+  ["Moon phase", "moon phase lunar full new crescent night moonrise moonset", "", () => setTimeout(() => moonToggle(true), 60)],
   ["Calendar", "calendar month festivals holidays india diwali holi meetings", "C", () => setTimeout(() => openCal(), 60)],
   ["Calendar: week view", "week calendar meetings schedule timeline agenda", "", () => setTimeout(() => { calMode = "week"; try { localStorage["dayboard:calmode"] = "week"; } catch {} openCal(); }, 60)],
   ...(HAS_OL ? [["Refresh meetings", "outlook meetings calendar sync refresh reload", "", () => (ol?.url ? mtRefresh(true) : toggleSettings(true))]] : []),

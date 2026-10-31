@@ -25,6 +25,7 @@ This repo is the web edition of a Chrome extension (a new-tab page). Files here 
 - **Shortcuts.** `SEED` in `newtab.js` seeds the top bar (no project) and the **Quick navigation** strip under the board (`@dock`). All editable in the UI.
 - **Spotlight** (`Ctrl+K`, `/`, or click the top search bar): commands, shortcuts, projects, notes, tasks; any other text becomes "Add task". Prefixes `gpt `/`?` (ChatGPT), `g ` (Google), `claude `.
 - **Backgrounds.** Met Open Access paintings and Wikimedia nature photos, rotated every 3 hours with weighted, slot-stable picks (`weightOf`, `drawFrom`, `pickIdx`); a weekly-refreshed Met catalogue (`libFetch`); your own pictures in IndexedDB; weather effects (Open-Meteo) drawn on the background only; a wallpaper picker; "Look closer" detail tour; painting story panel (Met -> Wikidata -> Wikipedia).
+- **Moon.** Phase, moonrise/moonset and the next new/full moon are computed on the device; after sunset the moon rides the sun arc, and a small moon icon (or Spotlight "Moon phase") opens a card with the details.
 - **Time.** Sunrise/sunset arc computed locally from a chosen city (`CITIES`, `prefs.city`), time rings with hover highlighting, a Time view (life in weeks needs a birth date; year in dots), and a calendar with famous Indian festivals (`FEST`, bundled `FEST_FALLBACK` for 2026-27).
 - **Calm features.** Focus mode (`F`, frosted lettering only), calm mode (`Z`), Open the day ritual (`O`), one-minute breath (`B`), Sort my head (`T`), Wrap up the day (`E`).
 
