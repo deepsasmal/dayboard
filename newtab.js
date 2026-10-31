@@ -1673,7 +1673,7 @@ $("#snapList").onclick = (e) => { // non-destructive: only brings back what is m
 };
 
 /* ---------- meeting: notes on the left, tasks on the right; action lines become tasks ---------- */
-let mtg = null, mtT, mtDue = "today"; // mtg = { id, title, with, body, start, proj } while a meeting is running (survives closing the tab)
+let mtg = null, mtT, mtDue = "today"; // mtg = { id, title, with, body, start, end?, loc?, proj } while a meeting is running (survives closing the tab)
 const mtKeep = () => store.set({ meeting: mtg });
 const mtDueDate = () => ({ today: today(), tomorrow: plus(today(), 1), week: plus(today(), 7) })[mtDue];
 const mtBtn = () => { $("#mtgBtn").classList.toggle("live", !!mtg); $("#mtgBtn").textContent = mtg ? "Meeting · live" : "Meeting"; };
@@ -1748,7 +1748,9 @@ $("#mtEnd").onclick = () => {
   const title = mtg.title.trim() || "Meeting";
   let note = null;
   if (mtg.body.trim() || mtg.title.trim()) {
-    const head = `# ${title}\n*${new Date(mtg.start).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}${mtg.with.trim() ? " · With " + mtg.with.trim() : ""}*\n\n`;
+    const when = `${new Date(mtg.start).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}, ${hhmm(mtg.start)}`;
+    const line = [when + (mtg.end ? ` – ${hhmm(mtg.end)}` : ""), mtg.loc, mtg.with.trim() && "With " + mtg.with.trim()].filter(Boolean).join(" · ");
+    const head = `# ${title}\n*${line}*\n\n`;
     note = { id: crypto.randomUUID(), title: title.slice(0, 48), body: head + mtg.body.replace(/^\s*- \[ \]\s*$\n?/gm, "").trim() + "\n", proj: mtg.proj, ts: Date.now() }; saved.unshift(note);
   }
   mtg = null; store.set({ meeting: null, saved }); save(); closeMtg(); mtBtn(); showNote(); render();
@@ -2471,9 +2473,10 @@ $("#olOn").onclick = async () => {
   try { url = new URL(u); } catch { return olSay("That does not look like a link.", true); }
   if (url.protocol !== "https:" && !/^(localhost|127\.0\.0\.1)$/.test(url.hostname)) return olSay("The link must start with https.", true);
   if (/\.html?$/i.test(url.pathname)) return olSay("That is the web view. Paste the ICS link (it ends in .ics).", true);
-  if (globalThis.chrome?.permissions) { // other calendar hosts ask once
-    const o = [url.protocol + "//" + url.hostname + "/*"];
-    if (!(await chrome.permissions.contains({ origins: o }).catch(() => false)) && !(await chrome.permissions.request({ origins: o }).catch(() => false))) return olSay("Chrome needs your OK to read that address. Try Connect again.", true);
+  if (globalThis.chrome?.permissions) { // asked first, in the same moment as the click: an await before it would drop the user gesture Chrome requires
+    const o = [url.protocol + "//" + url.hostname + "/*"]; let why = "";
+    const ok = await chrome.permissions.request({ origins: o }).catch((e) => { why = e?.message || ""; return false; }); // resolves true at once when already granted
+    if (!ok) return olSay(`Chrome did not give Dayboard access to ${url.hostname}${why ? ` (${why})` : ""}. Click Connect again and choose Allow.`, true);
   }
   ol = { url: url.href }; $("#olUrl").value = ""; mt = { ev: [], at: 0, err: "" }; await store.set({ ol }); olUI(); await mtRefresh(true);
   if (!mt.err) olSay(`Connected. ${mt.ev.length} events read.`);
@@ -2578,7 +2581,10 @@ $("#calPrev").onclick = () => calGo(-1); $("#calNext").onclick = () => calGo(1);
 $("#calMode").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; calMode = b.dataset.m; try { localStorage["dayboard:calmode"] = calMode; } catch {} drawCal(); };
 function mtFor(id) { // "Take notes": Meeting view, filled in from the calendar entry
   const e = mt.ev.find((x) => x.id === id); if (!e) return;
-  if (!mtg || (!mtg.body.trim() && !mtg.title.trim())) { mtg = { id: crypto.randomUUID(), title: e.t.slice(0, 80), with: e.org, body: "", start: e.s, proj: ui.proj || projects[0] }; mtKeep(); }
+  if (!mtg || (!mtg.body.trim() && !mtg.title.trim())) {
+    const who = [...new Set([e.org, ...(e.att || [])].filter(Boolean))].join(", ");
+    mtg = { id: crypto.randomUUID(), title: e.t.slice(0, 80), with: who.length > 160 ? who.slice(0, 157) + "…" : who, body: "", start: e.s, end: e.ad ? 0 : e.e, loc: e.loc || "", proj: ui.proj || projects[0] }; mtKeep();
+  }
   closeCal(); openMtg();
 }
 $("#cal").addEventListener("click", (e) => {
