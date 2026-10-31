@@ -1,4 +1,5 @@
 const $ = (s) => document.querySelector(s);
+const typingNow = () => /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || document.activeElement.isContentEditable; // the note page is a contenteditable
 const applyPaintHide = () => { const f = $("#paintFig"); if (!f) return; f.classList.toggle("off", !!prefs.paintHide); $("#paintBtn").tabIndex = prefs.paintHide ? -1 : 0; try { localStorage["dayboard:ph"] = prefs.paintHide ? "1" : ""; } catch {} };
 try { document.body.dataset.clock = localStorage["dayboard:cs"] || "solid"; } catch {} // no flash of the wrong clock style
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -183,7 +184,7 @@ $("#results").onmousedown = (e) => e.preventDefault(); // keep focus so the clic
 $("#results").onclick = (e) => { const li = e.target.closest("li"); if (li) go(+li.dataset.i, e.ctrlKey || e.metaKey); };
 $("#search").onsubmit = (e) => { e.preventDefault(); go(sel, false); };
 addEventListener("keydown", (e) => {
-  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  const typing = typingNow();
   if (e.key === "/" && !typing) { e.preventDefault(); openPal(); }
   if (e.key === "a" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $("#title").focus(); } // A: add a task
 });
@@ -731,29 +732,38 @@ function parse(raw, p) {
   return { title: raw.replace(/#[\w-]+|@[\w.-]+|!([123])\b/g, "").replace(/\s+/g, " ").trim(), p: pm ? +pm[1] : p, tags, wait: wm ? wm[1].replace(/_/g, " ") : null };
 }
 
-/* ---------- scratchpad: autosaved notes; action lines become tasks ---------- */
-/* the scratchpad is a draft; "Save note" files it as a titled note (tagged with the active project) and empties it. Saved notes edit in place. */
-let notes = "", cur = null, timer; // notes = draft text, cur = id of the saved note being edited (null = draft)
+/* ---------- notes: every note saves as you write. The first words create it; there is no Save step. ---------- */
+/* notes = a legacy unsaved draft (cur === null); a saved note is edited in place. The page stores markdown, the editor shows it live. */
+let notes = "", cur = null, timer, nq = "";
+const ta = $("#notes");
 const status = (s) => ($("#saved").textContent = s);
 const curNote = () => saved.find((n) => n.id === cur);
-const titleOf = (v) => (v.split("\n").map((l) => l.replace(/^[#\s>*-]+/, "").trim()).find(Boolean) || "Untitled note").slice(0, 48);
+const titleOf = (v) => (v.split("\n").map((l) => l.replace(/^[#\s>*+-]+|^\d+[.)]\s+|^\[[ xX]\]\s*/g, "").trim()).find(Boolean) || "Untitled note").slice(0, 48);
+const snippet = (v) => (v.split("\n").map((l) => l.replace(/^[#\s>*+-]+|^\d+[.)]\s+|^\[[ xX]\]\s*|[*_`]/g, "").trim()).filter(Boolean)[1] || "").slice(0, 70);
+function when(ts) {
+  const d = new Date(ts), t = new Date(), days = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+  return days === 0 ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : days === 1 ? "Yesterday" : days < 7 ? d.toLocaleDateString([], { weekday: "short" }) : d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+function dropEmpty() { const n = curNote(); if (n && !n.body.trim()) { saved = saved.filter((x) => x !== n); store.set({ saved }); } } // a note you opened and left blank is not kept
 function showNote() {
-  $("#notes").value = curNote()?.body ?? notes;
-  $("#nSave").textContent = cur ? "+ New note" : "Save note";
-  status(cur ? "Editing saved note" : "Saved");
+  ta.value = curNote()?.body ?? notes;
+  status("Saved");
   $("#nCount").textContent = saved.length;
   renderNoteList();
-  if (!$("#preview").hidden) renderPreview();
 }
-function renderNoteList() { // every saved note is listed; filtering by project is opt-in, never the default
-  const only = ui.proj && ui.notesOnly, rows = saved.filter((n) => !only || n.proj === ui.proj).sort((x, y) => y.ts - x.ts);
+function renderNoteList() { // every note is listed, newest edit first; filtering by project is opt-in, never the default
+  const only = ui.proj && ui.notesOnly, q = nq.trim().toLowerCase();
+  const rows = saved.filter((n) => (!only || n.proj === ui.proj) && (!q || (n.title + "\n" + n.body).toLowerCase().includes(q))).sort((x, y) => y.ts - x.ts);
   $("#nCount2").textContent = saved.length || "";
   $("#nOnly").hidden = !ui.proj; $("#nOnly").textContent = ui.notesOnly ? "Show all" : `Only ${ui.proj}`; $("#nOnly").setAttribute("aria-pressed", !!ui.notesOnly);
-  $("#nitems").innerHTML = `<li><button class="ni ${cur ? "" : "on"}" data-nid=""><span>Scratchpad</span><small>${notes.trim() ? "draft" : "empty"}</small></button></li>`
-    + (rows.length ? rows.map((n) => `<li><button class="ni ${n.id === cur ? "on" : ""}" data-nid="${n.id}"><span>${esc(n.title)}</span><small>${esc(n.proj || "No project")} · ${new Date(n.ts).toLocaleDateString([], { month: "short", day: "numeric" })}</small></button><button class="lx" data-ndel="${n.id}" aria-label="Delete note" title="Delete">×</button></li>`).join("")
-      : `<li class="fe">${only ? `No notes in ${esc(ui.proj)}.` : "No saved notes yet."} Write something, then press Save note.</li>`);
+  const fresh = !cur && !q ? `<li><button class="ni on" data-nid=""><b class="nt">${notes.trim() ? esc(titleOf(notes)) : "New note"}</b><span class="nsn"><i>Now</i>${notes.trim() ? "unsaved draft" : "start writing…"}</span></button></li>` : "";
+  $("#nitems").innerHTML = fresh
+    + (rows.length ? rows.map((n) => `<li><button class="ni ${n.id === cur ? "on" : ""}" data-nid="${n.id}"><b class="nt">${esc(n.title)}</b><span class="nsn"><i>${when(n.ts)}</i>${esc(snippet(n.body) || n.proj || "No other text")}</span></button><button class="lx" data-ndel="${n.id}" aria-label="Delete note" title="Delete">×</button></li>`).join("")
+      : q ? `<li class="fe">No notes match “${esc(nq.trim())}”.</li>` : only ? `<li class="fe">No notes in ${esc(ui.proj)}.</li>` : "");
 }
 $("#nOnly").onclick = () => { ui.notesOnly = !ui.notesOnly; renderNoteList(); };
+$("#nSearch").oninput = (e) => { nq = e.target.value; renderNoteList(); };
+$("#nSearch").onkeydown = (e) => { e.stopPropagation(); if (e.key === "Escape") { e.target.value = nq = ""; renderNoteList(); } };
 $("#nSavedBtn").onclick = () => { const on = $("#nlist").hidden; $("#nlist").hidden = !on; $("#nSavedBtn").setAttribute("aria-expanded", on); };
 $("#nlist").onclick = (e) => {
   const d = e.target.closest("[data-ndel]"), o = e.target.closest("[data-nid]");
@@ -764,23 +774,15 @@ $("#nlist").onclick = (e) => {
     store.set({ saved }); showNote();
     toTrash("note", n);
     undoable(`Deleted “${n.title.slice(0, 32)}”`, () => { saved.splice(Math.min(i, saved.length), 0, n); if (was) cur = n.id; trash = trash.filter((x) => x.item !== n); });
-  } else if (o) { cur = o.dataset.nid || null; showNote(); $("#notes").focus(); }
+  } else if (o && (o.dataset.nid || null) !== cur) { const nid = o.dataset.nid || null; dropEmpty(); cur = nid; showNote(); ta.focus(); }
 };
-function saveDraft() { // file the scratchpad as a titled note and empty it
-  saved.unshift({ id: crypto.randomUUID(), title: titleOf(notes), body: notes, proj: ui.proj, ts: Date.now() });
-  notes = ""; store.set({ saved, notes });
-}
-$("#nNew").onclick = () => { if (!cur && notes.trim()) saveDraft(); cur = null; showNote(); $("#notes").focus(); }; // always lands on a blank page
-$("#nSave").onclick = () => {
-  if (cur) { cur = null; showNote(); return $("#notes").focus(); } // start a fresh note
-  if (!notes.trim()) return status("Nothing to save yet");
-  saveDraft(); showNote(); status("Saved to Notes");
-};
-$("#notes").oninput = () => {
-  const v = $("#notes").value, n = curNote(); status("Saving…");
-  if (n) { n.body = v; n.title = titleOf(v); n.ts = Date.now(); } else notes = v;
-  clearTimeout(timer); timer = setTimeout(() => { store.set(n ? { saved } : { notes }); if ($("#saved").textContent === "Saving…") status("Saved"); renderNoteList(); }, 400);
-  if (!$("#preview").hidden) renderPreview();
+$("#nNew").onclick = () => { if (cur && !curNote()?.body.trim()) return ta.focus(); dropEmpty(); cur = null; showNote(); ta.focus(); }; // always lands on a blank page
+ta.oninput = () => {
+  const v = ta.value; status("Saving…");
+  let n = curNote();
+  if (!n && v.trim()) { n = { id: crypto.randomUUID(), title: titleOf(v), body: v, proj: ui.proj, ts: Date.now() }; saved.unshift(n); cur = n.id; notes = ""; } // the first words make it a note
+  else if (n) { n.body = v; n.title = titleOf(v); n.ts = Date.now(); } else notes = v;
+  clearTimeout(timer); timer = setTimeout(() => { store.set({ saved, notes }); status("Saved"); $("#nCount").textContent = saved.length; renderNoteList(); }, 400);
 };
 
 /* ---------- markdown: small renderer (headings, emphasis, lists, task lists, quotes, code, links) ---------- */
@@ -832,71 +834,135 @@ $("#preview").onclick = (e) => { // ticking a checkbox in the preview rewrites t
   $("#notes").value = L.join("\n"); $("#notes").oninput();
 };
 
-/* ---------- formatting toolbar + keyboard helpers ---------- */
-function put(text, from, to) { // execCommand keeps native undo working
-  const el = $("#notes"); el.focus();
-  if (!document.execCommand("insertText", false, text)) el.setRangeText(text, el.selectionStart, el.selectionEnd, "end");
-  if (from != null) el.setSelectionRange(from, to);
-  el.oninput();
+/* ---------- the page: a live editor. One <div data-t="..."> per markdown line, so headings, lists and checklists show as you type ---------- */
+const ned = $("#ned"), nativeVal = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+let syncing = false;
+const BLOCK = /^(li|ol|todo|quote)$/;
+const mkLine = (t = "p", html = "", o = {}) => { const d = document.createElement("div"); d.dataset.t = t; if (o.d) d.dataset.d = "1"; if (o.i) d.dataset.i = o.i; d.innerHTML = html || "<br>"; return d; };
+function mdToLines(src) {
+  const out = []; let code = false;
+  for (const l of src.split("\n")) {
+    let m;
+    if (/^```/.test(l)) { code = !code; continue; }
+    if (code) out.push(mkLine("code", esc(l)));
+    else if ((m = l.match(/^(#{1,6})\s+(.*)$/))) out.push(mkLine("h" + Math.min(3, m[1].length), inline(m[2])));
+    else if ((m = l.match(/^(\s*)(?:[-*+]\s+)?\[( |x|X)\]\s+(.*)$/))) out.push(mkLine("todo", inline(m[3]), { d: m[2] !== " ", i: Math.min(3, m[1].replace(/\t/g, "  ").length >> 1) }));
+    else if ((m = l.match(/^(\s*)[-*+]\s+(.*)$/))) out.push(mkLine("li", inline(m[2]), { i: Math.min(3, m[1].replace(/\t/g, "  ").length >> 1) }));
+    else if ((m = l.match(/^(\s*)\d+[.)]\s+(.*)$/))) out.push(mkLine("ol", inline(m[2]), { i: Math.min(3, m[1].replace(/\t/g, "  ").length >> 1) }));
+    else if ((m = l.match(/^>\s?(.*)$/))) out.push(mkLine("quote", inline(m[1])));
+    else out.push(mkLine("p", l.trim() ? inline(l) : ""));
+  }
+  return out.length ? out : [mkLine()];
 }
-function wrap(a, b, ph) {
-  const el = $("#notes"), s = el.selectionStart, sel = el.value.slice(s, el.selectionEnd) || ph;
-  put(a + sel + b, s + a.length, s + a.length + sel.length);
+function inlineMd(node) {
+  let s = "";
+  for (const c of node.childNodes) {
+    if (c.nodeType === 3) { s += c.nodeValue; continue; }
+    if (c.nodeName === "BR") continue;
+    const x = inlineMd(c), t = c.nodeName; if (!x) continue;
+    s += t === "B" || t === "STRONG" ? `**${x}**` : t === "I" || t === "EM" ? `*${x}*` : t === "CODE" ? `\`${x}\`` : t === "A" ? `[${x}](${c.getAttribute("href")})` : t === "S" || t === "DEL" || t === "STRIKE" ? `~~${x}~~` : x;
+  }
+  return s;
 }
-function eachLine(fn) { // transform the whole lines touched by the selection
-  const el = $("#notes"), v = el.value, ls = v.lastIndexOf("\n", el.selectionStart - 1) + 1;
-  let le = v.indexOf("\n", el.selectionEnd); if (le < 0) le = v.length;
-  el.setSelectionRange(ls, le);
-  const block = fn(v.slice(ls, le).split("\n")).join("\n");
-  put(block, ls, ls + block.length);
+function getDoc() {
+  const out = []; let code = false; const n = [0, 0, 0, 0];
+  for (const l of ned.children) {
+    const t = l.dataset.t || "p", i = +l.dataset.i || 0, pad = "  ".repeat(i), txt = inlineMd(l).replace(/ /g, " ");
+    if (t === "code") { if (!code) out.push("```"); code = true; out.push(l.textContent.replace(/ /g, " ")); continue; }
+    if (code) { out.push("```"); code = false; }
+    if (t === "ol") { n[i]++; for (let k = i + 1; k < 4; k++) n[k] = 0; } else if (t !== "li" && t !== "todo") n.fill(0);
+    out.push(t === "h1" ? "# " + txt : t === "h2" ? "## " + txt : t === "h3" ? "### " + txt : t === "li" ? `${pad}- ${txt}` : t === "ol" ? `${pad}${n[i]}. ${txt}` : t === "todo" ? `${pad}- [${l.dataset.d ? "x" : " "}] ${txt}` : t === "quote" ? "> " + txt : txt);
+  }
+  if (code) out.push("```");
+  while (out.length && !out.at(-1).trim()) out.pop();
+  return out.join("\n");
 }
-const toggle = (re, add) => (L) => (L.every((l) => re.test(l)) ? L.map((l) => l.replace(re, "")) : L.map((l) => add(l.replace(re, ""))));
-const FORMAT = {
-  bold: () => wrap("**", "**", "bold"),
-  italic: () => wrap("*", "*", "italic"),
-  h: () => eachLine((L) => L.map((l) => { const n = (l.match(/^(#{1,3})\s/)?.[1].length ?? 0); return (n >= 3 ? "" : "#".repeat(n + 1) + " ") + l.replace(/^#{1,3}\s/, ""); })),
-  ul: () => eachLine(toggle(/^\s*[-*]\s(?!\[)/, (l) => "- " + l)),
-  task: () => eachLine(toggle(/^\s*[-*]\s\[[ xX]\]\s/, (l) => "- [ ] " + l)),
-  quote: () => eachLine(toggle(/^>\s?/, (l) => "> " + l)),
-  code: () => { const el = $("#notes"); /\n/.test(el.value.slice(el.selectionStart, el.selectionEnd)) ? wrap("```\n", "\n```", "") : wrap("`", "`", "code"); },
-  link: () => { const el = $("#notes"), s = el.selectionStart, sel = el.value.slice(s, el.selectionEnd) || "text"; put(`[${sel}](https://)`, s + sel.length + 3, s + sel.length + 11); },
-};
-document.querySelector(".tb").onmousedown = (e) => e.preventDefault(); // keep the selection in the textarea
-document.querySelector(".tb").onclick = (e) => { const b = e.target.closest("[data-f]"); if (b) FORMAT[b.dataset.f](); };
-$("#notes").onkeydown = (e) => {
-  const el = e.target, mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
-  if (mod && (k === "b" || k === "i" || k === "k")) { e.preventDefault(); e.stopPropagation(); FORMAT[{ b: "bold", i: "italic", k: "link" }[k]](); return; }
-  const s = el.selectionStart, ls = el.value.lastIndexOf("\n", s - 1) + 1, line = el.value.slice(ls, s);
-  const m = line.match(/^(\s*)(?:([-*+])|(\d+)([.)]))\s+(\[[ xX]\]\s+)?(.*)$/);
-  if (e.key === "Enter" && !e.shiftKey && !mod && m && s === el.selectionEnd) { // continue (or end) a list
+function renumber() { const n = [0, 0, 0, 0]; for (const l of ned.children) { const t = l.dataset.t, i = +l.dataset.i || 0; if (t === "ol") { n[i]++; for (let k = i + 1; k < 4; k++) n[k] = 0; l.dataset.n = n[i]; } else if (t !== "li" && t !== "todo") n.fill(0); } }
+function loadDoc(v) {
+  if (ned.dataset.v === v && document.activeElement === ned) return; // an echo of what you are typing
+  ned.dataset.v = v; ned.replaceChildren(...mdToLines(v)); renumber();
+}
+Object.defineProperty(ta, "value", { get() { return nativeVal.get.call(this); }, set(v) { nativeVal.set.call(this, v); if (!syncing) loadDoc(v); } });
+ta.focus = (o) => { ned.focus(o); const r = document.createRange(); r.selectNodeContents(ned.lastElementChild); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+ta.blur = () => ned.blur();
+function sync() { renumber(); const v = getDoc(); ned.dataset.v = v; syncing = true; nativeVal.set.call(ta, v); syncing = false; ta.oninput(); }
+const lineOf = (n) => { while (n && n.parentNode !== ned) n = n.parentNode; return n && n.nodeType === 1 ? n : null; };
+const curLine = () => { const s = getSelection(); return s.rangeCount ? lineOf(s.anchorNode) : null; };
+const selLines = () => { const s = getSelection(); if (!s.rangeCount) return []; const a = lineOf(s.anchorNode), b = lineOf(s.focusNode); if (!a || !b) return []; const L = [...ned.children]; let i = L.indexOf(a), k = L.indexOf(b); if (i > k) [i, k] = [k, i]; return L.slice(i, k + 1); };
+function caretTo(el, end = false) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(!end); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+const setT = (l, t) => { l.dataset.t = t; if (t !== "todo") delete l.dataset.d; if (!BLOCK.test(t) || t === "quote") delete l.dataset.i; };
+function atStart(l) { const s = getSelection(); if (!s.isCollapsed) return false; const r = document.createRange(); r.selectNodeContents(l); r.setEnd(s.anchorNode, s.anchorOffset); return !r.toString().length; }
+function normalise() { // keep the editor a plain stack of lines
+  for (const c of [...ned.childNodes]) if (c.nodeType === 3 || c.nodeName === "BR" || c.nodeName !== "DIV") { const d = mkLine("p"); if (c.nodeType === 3) d.textContent = c.nodeValue; ned.replaceChild(d, c); }
+  if (!ned.children.length) { const d = mkLine(); ned.append(d); caretTo(d); }
+  for (const l of ned.children) { if (!l.dataset.t) l.dataset.t = "p"; }
+}
+const SHORT = [[/^(#{1,3}) $/, (m) => ["h" + m[1].length]], [/^[-*] $/, () => ["li"]], [/^\d+[.)] $/, () => ["ol"]], [/^\[( |x|X)?\] $/, (m) => ["todo", m[1] === "x" || m[1] === "X"]], [/^> $/, () => ["quote"]]];
+ned.addEventListener("input", (e) => {
+  normalise();
+  const l = curLine();
+  if (l && l.dataset.t === "p" && e.inputType === "insertText" && e.data === " ") { // markdown shortcuts: "# ", "- ", "1. ", "[] ", "> "
+    const txt = l.textContent.replace(/ /g, " ");
+    for (const [re, f] of SHORT) { const m = txt.match(re); if (m) { const [t, d] = f(m); setT(l, t); if (d) l.dataset.d = "1"; l.innerHTML = "<br>"; caretTo(l); break; } }
+  }
+  sync();
+});
+ned.addEventListener("keydown", (e) => {
+  const mod = e.ctrlKey || e.metaKey, l = curLine(); let handled = true;
+  if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); e.stopPropagation(); return FORMAT.link(); }
+  if (mod) return; // bold, italic, undo, select all: the browser's own
+  if (!l) return;
+  const t = l.dataset.t, empty = !l.textContent.trim();
+  if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    if (!m[6]) { el.setSelectionRange(ls, s); document.execCommand("delete") || el.setRangeText("", ls, s, "end"); el.oninput(); }
-    else put(`\n${m[1]}${m[2] ?? `${+m[3] + 1}${m[4]}`} ${m[5] ? "[ ] " : ""}`);
-  } else if (e.key === "Tab" && !e.shiftKey && m) { e.preventDefault(); el.setSelectionRange(ls, ls); put("  "); el.setSelectionRange(s + 2, s + 2); }
+    if (t === "p" && l.textContent.trim() === "```") { setT(l, "code"); l.innerHTML = "<br>"; caretTo(l); }
+    else if (t === "code") { if (empty) { setT(l, "p"); caretTo(l); } else { const n = mkLine("code"); l.after(n); caretTo(n); } }
+    else if (empty && BLOCK.test(t)) { setT(l, "p"); caretTo(l); } // an empty bullet ends the list
+    else if (atStart(l) && !empty) { const n = mkLine(t.startsWith("h") ? "p" : t, "", { i: +l.dataset.i }); l.before(n); }
+    else {
+      document.execCommand("insertParagraph"); const n = curLine();
+      if (n && n !== l) { if (/^h/.test(t)) setT(n, "p"); else { setT(n, t); if (t === "todo") delete n.dataset.d; } }
+    }
+  } else if (e.key === "Backspace" && atStart(l) && t !== "p") { e.preventDefault(); if (+l.dataset.i > 0) l.dataset.i = +l.dataset.i - 1; else setT(l, "p"); }
+  else if (e.key === "Tab" && /^(li|ol|todo)$/.test(t)) { e.preventDefault(); const i = (+l.dataset.i || 0) + (e.shiftKey ? -1 : 1); if (i >= 0 && i <= 3) l.dataset.i = i; }
+  else if (e.key === "Tab") { e.preventDefault(); if (!e.shiftKey) document.execCommand("insertText", false, "  "); }
+  else handled = false;
+  if (handled) sync();
+  if (e.key !== "Escape") e.stopPropagation(); // single-letter page shortcuts (N, F, A…) must not fire while you write
+});
+ned.addEventListener("paste", (e) => {
+  e.preventDefault();
+  const txt = (e.clipboardData.getData("text/plain") || "").replace(/\r/g, ""); if (!txt) return;
+  const l = curLine();
+  if (!/\n/.test(txt) || !l) return void document.execCommand("insertText", false, txt);
+  const ls = mdToLines(txt); (l.textContent.trim() ? l.after(...ls) : l.replaceWith(...ls)); caretTo(ls.at(-1), true); sync();
+});
+ned.addEventListener("click", (e) => {
+  const l = e.target.closest("#ned > div"), a = e.target.closest("a");
+  if (a && (e.ctrlKey || e.metaKey)) return void window.open(a.href, "_blank", "noopener");
+  if (l && l.dataset.t === "todo" && e.target === l && e.offsetX < 32 + (+l.dataset.i || 0) * 22) { if (l.dataset.d) delete l.dataset.d; else l.dataset.d = "1"; sync(); }
+});
+const FORMAT = {
+  bold: () => document.execCommand("bold"),
+  italic: () => document.execCommand("italic"),
+  code: () => { const s = getSelection().toString(); document.execCommand("insertHTML", false, `<code>${esc(s || "code")}</code>&#8203;`); sync(); },
+  link: () => { const s = getSelection().toString(); const u = prompt("Link address", "https://"); if (u && /^https?:\/\//i.test(u)) { document.execCommand("insertHTML", false, `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(s || u)}</a>`); sync(); } },
+  h: () => { const L = selLines(); const n = L.every((l) => l.dataset.t === "h1") ? "h2" : L.every((l) => l.dataset.t === "h2") ? "h3" : L.every((l) => l.dataset.t === "h3") ? "p" : "h1"; L.forEach((l) => setT(l, n)); sync(); },
 };
+for (const [k, t] of [["ul", "li"], ["ol", "ol"], ["task", "todo"], ["quote", "quote"]]) FORMAT[k] = () => { const L = selLines(), all = L.every((l) => l.dataset.t === t); L.forEach((l) => setT(l, all ? "p" : t)); sync(); };
+document.querySelector(".tb").onmousedown = (e) => e.preventDefault(); // keep the selection in the page
+document.querySelector(".tb").onclick = (e) => { const b = e.target.closest("[data-f]"); if (!b) return; ned.focus(); FORMAT[b.dataset.f](); };
 
 /* ---------- view modes + full screen ---------- */
-let nmode = "split", full = false;
-try { nmode = localStorage["dayboard:nmode"] || "split"; } catch {}
-function applyMode() {
-  const m = nmode;
-  $("#notes").hidden = m === "preview"; $("#preview").hidden = m === "edit";
-  document.querySelector(".nwrap").className = "nwrap " + (m === "split" ? "split" : "one");
-  document.querySelector(".tb").hidden = m === "preview";
-  document.querySelectorAll("#nModes [data-m]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === m));
-  if (m !== "edit") renderPreview();
-}
-$("#nModes").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; nmode = b.dataset.m; try { localStorage["dayboard:nmode"] = nmode; } catch {} applyMode(); };
+let full = false;
 function toggleFull(on = !full) {
   full = on; $("#notesPanel").classList.toggle("full", on); $("#nFull").setAttribute("aria-pressed", on);
   $("#nFull").title = on ? "Exit full screen (Esc)" : "Full screen";
-  if (on && nmode === "edit") nmode = "split";
-  applyMode(); if (on) $("#notes").focus();
+  if (on) ta.focus();
 }
 $("#nFull").onclick = () => toggleFull();
-applyMode();
 $("#mtg").onclick = () => openMtg();
-$("#copy").onclick = () => navigator.clipboard.writeText($("#notes").value).then(() => status("Copied"), () => status("Copy blocked"));
+$("#copy").onclick = () => navigator.clipboard.writeText(ta.value).then(() => status("Copied"), () => status("Copy blocked"));
 $("#extract").onclick = () => {
   const re = ACT;
   let n = 0;
@@ -921,7 +987,7 @@ $("#notesBtn").onclick = () => toggleNotes();
 $("#notesX").onclick = () => toggleNotes(false);
 try { if (localStorage["dayboard:notes-open"] !== "0") toggleNotes(true, true); } catch { toggleNotes(true, true); } // open unless you closed it
 addEventListener("keydown", (e) => {
-  if ((e.key === "n" || e.key === "s") && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); toggleNotes(e.key === "n" ? true : undefined); } // N opens and focuses notes, S toggles them
+  if ((e.key === "n" || e.key === "s") && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow()) { e.preventDefault(); toggleNotes(e.key === "n" ? true : undefined); } // N opens and focuses notes, S toggles them
   if (e.key === "Escape" && !$("#notesPanel").hidden) { // Esc leaves full screen, or just steps out of the editor; closing is the Notes button or the ×
     if (full) toggleFull(false); else if (document.activeElement.closest?.("#notesPanel")) document.activeElement.blur();
   }
@@ -1081,13 +1147,13 @@ store.get().then((s) => { tasks = s.tasks || []; projects = s.projects || projec
     SEED.filter((x) => x[2] === "@dock").forEach(([name, url]) => links.push({ id: crypto.randomUUID(), name, url, proj: null, dock: true }));
     store.set({ dockSeeded: true }); s.links = null;
   }
-  if (!s.links || s.dirty) save(); notes = s.notes || ""; saved = s.saved || []; mtg = s.meeting || null; hook = s.hook || null; hookUI(); mtBtn(); showNote(); render(); syncPrefsUI(); tick(); if (prefs.art !== "both" && !pin) applyArt(); takeSnap(); wxStart(); });
+  if (!s.links || s.dirty) save(); notes = s.notes || ""; saved = s.saved || []; if (notes.trim()) { saved.unshift({ id: crypto.randomUUID(), title: titleOf(notes), body: notes, proj: null, ts: Date.now() }); notes = ""; store.set({ saved, notes }); } cur = [...saved].sort((x, y) => y.ts - x.ts)[0]?.id ?? null; mtg = s.meeting || null; hook = s.hook || null; hookUI(); mtBtn(); showNote(); render(); syncPrefsUI(); tick(); if (prefs.art !== "both" && !pin) applyArt(); takeSnap(); wxStart(); });
 
 /* ---------- calm mode (Z) and idle fade: the interface steps back, the painting stays ---------- */
 const body = document.body;
 let idleT, lastWake = 0;
 const isCalm = () => body.classList.contains("calm");
-const busy = () => !$("#settings").hidden || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+const busy = () => !$("#settings").hidden || typingNow();
 function rest() { if (busy()) { idleT = setTimeout(rest, 5000); return; } body.classList.add("idle"); }
 function wake() {
   const now = Date.now();
@@ -1102,7 +1168,7 @@ function setCalm(on) {
   if (on) { clearTimeout(idleT); body.classList.add("idle"); } else wake();
 }
 $("#calm").onclick = () => setCalm(!isCalm());
-addEventListener("keydown", (e) => { if (e.key === "z" && !e.ctrlKey && !e.metaKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) setCalm(!isCalm()); });
+addEventListener("keydown", (e) => { if (e.key === "z" && !e.ctrlKey && !e.metaKey && !typingNow()) setCalm(!isCalm()); });
 try { if (localStorage["dayboard:calm"]) setCalm(true); else wake(); } catch { wake(); }
 
 /* ---------- settings: export / import backup ---------- */
@@ -1242,7 +1308,7 @@ function externalUpdate(next) {
   if (next.saved && !same(next.saved, saved)) { saved = next.saved; changed = true; }
   if (next.projects && !same(next.projects, projects)) { projects = next.projects; changed = true; }
   if (next.paint && !same(next.paint, paint)) { paint = next.paint; changed = true; }
-  if (typeof next.notes === "string" && next.notes !== notes && document.activeElement !== $("#notes")) { notes = next.notes; changed = true; } // another tab's scratchpad
+  if (typeof next.notes === "string" && next.notes !== notes && document.activeElement !== ned) { notes = next.notes; changed = true; } // another tab's scratchpad
   if (next.trash && !same(next.trash, trash)) { trash = next.trash; changed = true; }
   if ("hook" in next && !same(next.hook, hook)) { hook = next.hook; hookUI(); renderNudge(); }
   if (next.prefs && !same({ ...prefs, ...next.prefs }, prefs)) { Object.assign(prefs, next.prefs); changed = true; }
@@ -1376,7 +1442,7 @@ addEventListener("keydown", (e) => {
   const k = { 1: "today", ArrowRight: "today", 2: "later", ArrowUp: "later", 3: "wait", ArrowDown: "wait", 4: "drop", ArrowLeft: "drop", " ": "skip" }[e.key];
   if (k) { e.preventDefault(); sortChoose(k); } else if (e.key === "Backspace") { e.preventDefault(); sortUndo(); }
 }, true);
-addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && $("#sort").hidden) { e.preventDefault(); openSort(); } });
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey && !typingNow() && $("#sort").hidden) { e.preventDefault(); openSort(); } });
 
 /* ---------- paint the day: each finished task adds a brushstroke, coloured by the time of day it was finished ---------- */
 function hash(s) { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; }
@@ -1573,7 +1639,7 @@ addEventListener("keydown", (e) => {
   if (!/INPUT|TEXTAREA/.test(e.target.tagName)) e.stopPropagation();
 }, true);
 addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "e" && !e.ctrlKey && !e.metaKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && $("#wrap").hidden && $("#sort").hidden && $("#days").hidden) { e.preventDefault(); openWrap(); }
+  if (e.key.toLowerCase() === "e" && !e.ctrlKey && !e.metaKey && !typingNow() && $("#wrap").hidden && $("#sort").hidden && $("#days").hidden) { e.preventDefault(); openWrap(); }
 });
 
 /* ---------- recover: 30 days of deleted notes and tasks, and a snapshot taken at the first open of each day ---------- */
@@ -1695,14 +1761,14 @@ $("#mtDiscard").onclick = () => {
   mtg = null; mtKeep(); closeMtg(); mtBtn(); render();
   undoable("Meeting discarded", () => { mtg = prev; mtKeep(); openMtg(); });
 };
-addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && $("#mtgv").hidden && $("#sort").hidden && $("#wrap").hidden && $("#lb").hidden) { e.preventDefault(); openMtg(); } });
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && $("#mtgv").hidden && $("#sort").hidden && $("#wrap").hidden && $("#lb").hidden) { e.preventDefault(); openMtg(); } });
 
 /* ---------- focus mode (F) ---------- */
 const zenOpen = () => ["#sort", "#wrap", "#days", "#lb", "#mtgv", "#openday", "#breath", "#timev", "#cal"].some((s) => !$(s).hidden) || document.body.classList.contains("looking");
 function setZen(on = !body.classList.contains("zen")) { body.classList.toggle("zen", on); scrollTo(0, 0); }
 $("#zenBtn").onclick = () => setZen(true); $("#zenRow").onclick = () => setTimeout(() => setZen(true), 60); $("#zenExit").onclick = () => setZen(false);
 addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || zenOpen()) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || typingNow() || zenOpen()) return;
   if (e.key.toLowerCase() === "f") { e.preventDefault(); setZen(); } else if (e.key === "Escape" && body.classList.contains("zen")) setZen(false);
 });
 
@@ -2098,7 +2164,7 @@ addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "l" || e.key === "ArrowRight") lookGo(); else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length < 12 && !/^(Shift|Control|Alt|Meta)$/.test(e.key)) lookStop();
     return;
   }
-  if (e.key.toLowerCase() === "l" && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !zenOpen()) { e.preventDefault(); lookStart(); }
+  if (e.key.toLowerCase() === "l" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); lookStart(); }
 }, true);
 document.addEventListener("click", () => { if (lookOn) lookStop(); }, true);
 $("#lookBtn").onclick = () => setTimeout(lookStart, 60); // let the menu close first
@@ -2156,12 +2222,12 @@ $("#oNew").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); oFi
 $("#openX").onclick = closeOpenDay;
 $("#openDayBtn").onclick = () => setTimeout(openDay, 60);
 $("#intent").onclick = () => { openDay(); oShow(2); };
-addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "o" && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !zenOpen() && $("#openday").hidden) { e.preventDefault(); openDay(); } });
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "o" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen() && $("#openday").hidden) { e.preventDefault(); openDay(); } });
 // the first tab of a morning offers it once; a minute after load, never over something you are doing
 setTimeout(() => {
   let seen = ""; try { seen = localStorage["dayboard:opened"] || ""; } catch {}
   const h = new Date().getHours();
-  if (prefs.openDay !== "off" && seen !== today() && h >= 4 && h < 12 && !zenOpen() && !document.body.classList.contains("zen") && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) openDay();
+  if (prefs.openDay !== "off" && seen !== today() && h >= 4 && h < 12 && !zenOpen() && !document.body.classList.contains("zen") && !typingNow()) openDay();
 }, 1800);
 
 /* ---------- the weekly fetch: ~two dozen new public-domain landscape paintings from the Met, kept in a library of up to 300 ---------- */
@@ -2330,7 +2396,7 @@ $("#tNote").onclick = (e) => { if (e.target.closest("#tChange")) { tEditing = tr
 $("#timeX").onclick = closeTime;
 $("#timeBtn").onclick = () => setTimeout(() => openTime(), 60);
 addEventListener("resize", () => { if (!$("#timev").hidden) drawTime(); });
-addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !zenOpen()) { e.preventDefault(); openTime(); } });
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openTime(); } });
 
 /* ---------- calendar: a month grid with the famous Indian festivals, from Google's public "Holidays in India" calendar ---------- */
 /* FEST-BEGIN */
@@ -2406,7 +2472,7 @@ addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); e.stopPropagation(); calGo(-1); } else if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); e.stopPropagation(); calGo(1); } else if (e.key === "Home") { e.preventDefault(); openCal(); }
     return;
   }
-  if (e.key.toLowerCase() === "c" && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !zenOpen()) { e.preventDefault(); openCal(); }
+  if (e.key.toLowerCase() === "c" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openCal(); }
 }, true);
 
 /* ---------- hide / show the small painting under the sun arc ---------- */
@@ -2425,4 +2491,4 @@ function openBreath() {
   breathT = setInterval(() => { left--; $("#breathLeft").textContent = left + "s"; if (left <= 0) closeBreath(); }, 1000);
 }
 $("#breathX").onclick = closeBreath;
-addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !zenOpen()) { e.preventDefault(); openBreath(); } });
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openBreath(); } });

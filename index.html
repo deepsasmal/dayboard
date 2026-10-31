@@ -186,11 +186,11 @@
 
 <section id="notesPanel" class="notes" hidden aria-label="Notes">
   <header><h2>Notes</h2><span class="tools">
-    <span class="seg" id="nModes" role="group" aria-label="View"><button data-m="edit">Edit</button><button data-m="preview">Preview</button><button data-m="split" id="mSplit" hidden>Split</button></span>
     <button id="nSavedBtn" class="pill" aria-expanded="true" title="Show or hide the list of notes">Notes list <span id="nCount" class="mono">0</span></button><button id="nFull" class="vt" aria-label="Full screen" aria-pressed="false" title="Full screen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button><button id="notesX" class="x" aria-label="Close notes" style="opacity:1">×</button></span></header>
     <div class="nbody">
     <div id="nlist" class="nlist">
       <div class="nlh"><span>Saved <b id="nCount2" class="mono"></b></span><button type="button" id="nNew" class="pill">+ New</button><button type="button" id="nOnly" class="pill" hidden></button></div>
+      <input id="nSearch" type="search" class="nsearch" placeholder="Search notes" aria-label="Search notes" autocomplete="off">
       <ul id="nitems"></ul>
     </div>
     <div id="neditor" class="pad">
@@ -199,20 +199,20 @@
         <button type="button" data-f="italic" title="Italic (Ctrl+I)"><i>I</i></button>
         <button type="button" data-f="h" title="Heading">H</button>
         <button type="button" data-f="ul" title="Bullet list">List</button>
+        <button type="button" data-f="ol" title="Numbered list">1.</button>
         <button type="button" data-f="task" title="Checklist">Task</button>
         <button type="button" data-f="quote" title="Quote">Quote</button>
         <button type="button" data-f="code" title="Code">Code</button>
         <button type="button" data-f="link" title="Link (Ctrl+K)">Link</button>
       </div>
       <div class="nwrap one">
-        <label class="sr" for="notes">Scratchpad</label>
-        <textarea id="notes" spellcheck="false" placeholder="Jot anything. Markdown works: # heading, **bold**, - list, - [ ] task, `code`.&#10;&#10;Lines like  [ ] Send deck to Priya #client !1  can become tasks."></textarea>
+        <textarea id="notes" hidden tabindex="-1" aria-hidden="true"></textarea>
+        <div id="ned" class="ned" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Note" spellcheck="true"><div data-t="p"><br></div></div>
         <div id="preview" class="preview" hidden></div>
       </div>
       <div class="opts">
         <button type="button" class="pill" id="mtg" title="Meeting notes and tasks  (M)">Meeting view</button>
         <button type="button" class="pill" id="copy">Copy</button>
-        <button type="button" class="pill" id="nSave">Save note</button>
         <span id="saved" class="lab" role="status">Saved</span>
         <button type="button" class="pill solid" id="extract">Extract actions</button>
       </div>
