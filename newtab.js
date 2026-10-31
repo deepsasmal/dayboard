@@ -321,10 +321,10 @@ function drawMoon() {
   const nx = [[0, "New moon"], [.25, "First quarter"], [.5, "Full moon"], [.75, "Last quarter"]].map(([t, n]) => [n, nextPhase(t, now)]).filter((x) => x[1]).sort((a, b) => a[1] - b[1]);
   const when = (t) => { const d = Math.round((t - now) / 864e5); return d <= 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`; };
   const week = [...Array(7)].map((_, i) => { const t = new Date(); t.setHours(12, 0, 0, 0); t.setDate(t.getDate() + i); return `<span class="${i ? "" : "now"}"><svg viewBox="-9 -9 18 18" width="22" height="22" aria-hidden="true">${moonG(moonPhase(t.getTime()).p, 7, flip)}</svg><small>${i ? t.toLocaleDateString(undefined, { weekday: "short" }) : "Today"}</small></span>`; }).join("");
-  $("#moonPop").innerHTML = `<div class="mphead"><svg viewBox="-30 -30 60 60" width="84" height="84" aria-hidden="true">${moonG(p, 25, flip)}</svg><div><h3>${phaseName(p)}</h3><p>${Math.round(f * 100)}% lit · ${(p * 29.530588).toFixed(0)} days old</p></div></div>`
+  $("#moonPop").innerHTML = `<div class="mphead"><svg viewBox="-30 -30 60 60" width="84" height="84" aria-hidden="true">${moonG(p, 25, flip)}</svg><div><h3>${phaseName(p)}</h3><p>${Math.round(f * 100)}% lit</p></div></div>`
     + `<div class="mprow"><span><small>Moonrise</small><b class="mono">${rise ? hhmm(rise) + `<i>${dayTag(rise)}</i>` : "–"}</b></span><span class="r"><small>Moonset</small><b class="mono">${set ? hhmm(set) + `<i>${dayTag(set)}</i>` : "–"}</b></span></div>`
     + `<ul class="mpnext">${nx.map(([n, t]) => `<li><span>${n}</span><b>${new Date(t).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</b><small>${when(t)}</small></li>`).join("")}</ul>`
-    + `<div class="mpweek" aria-label="The week ahead">${week}</div><p class="mpnote">Worked out on your device for ${esc(place().name)}. Rise and set are good to a few minutes, phase dates to about an hour.</p>`;
+    + `<div class="mpweek" aria-label="The week ahead">${week}</div>`;
 }
 function moonToggle(on = $("#moonPop").hidden) { if (on) drawMoon(); $("#moonPop").hidden = !on; $("#moonBtn").setAttribute("aria-expanded", on); }
 $("#moonBtn").onclick = (e) => { e.stopPropagation(); moonToggle(); };
