@@ -17,7 +17,7 @@ const store = {
   },
 };
 let tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
-let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", clockStyle: "solid", paintHide: false, favs: [], openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
+let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", clockStyle: "solid", paintHide: false, favs: [], units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
 const CITIES = [
   { name: "Hyderabad", lat: 17.385, lon: 78.4867, tz: "Asia/Kolkata" }, { name: "Bengaluru", lat: 12.9716, lon: 77.5946, tz: "Asia/Kolkata" },
   { name: "Mumbai", lat: 19.076, lon: 72.8777, tz: "Asia/Kolkata" }, { name: "Delhi", lat: 28.6139, lon: 77.209, tz: "Asia/Kolkata" },
@@ -359,7 +359,7 @@ function tick() {
   const d = new Date(), h = d.getHours();
   $("#greet").textContent = (h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + ".";
   renderWeek(); renderSun();
-  $("#date").textContent = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  $("#dateT").textContent = d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   const h12 = prefs.clock === "12", [, hh, mm, ap] = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: h12 ? "h12" : "h23" }).match(/(\d+):(\d+)\s?([AP]M)?/);
   $("#clock").innerHTML = `${h12 ? +hh : hh}<span>:</span>${mm}${ap ? `<small class="ampm">${ap}</small>` : ""}`;
 }
@@ -1855,6 +1855,8 @@ const palCmds = () => [
   ["Life in weeks", "time life weeks dots years lived remaining mortality", "W", () => setTimeout(() => openTime("life"), 60)],
   ["Year in dots", "time year days dots left progress", "", () => setTimeout(() => openTime("year"), 60)],
   ["Moon phase", "moon phase lunar full new crescent night moonrise moonset", "", () => setTimeout(() => moonToggle(true), 60)],
+  ["Weather", "weather temperature forecast rain sky", "", () => setTimeout(() => wxToggle(true), 60)],
+  ["Temperature: switch °C / °F", "fahrenheit celsius units temperature degrees", "", () => { prefs.units = useF() ? "c" : "f"; save(); renderWx(); }],
   ["Calendar", "calendar month festivals holidays india diwali holi meetings", "C", () => setTimeout(() => openCal(), 60)],
   ["Calendar: week view", "week calendar meetings schedule timeline agenda", "", () => setTimeout(() => { calMode = "week"; try { localStorage["dayboard:calmode"] = "week"; } catch {} openCal(); }, 60)],
   ...(HAS_OL ? [["Refresh meetings", "outlook meetings calendar sync refresh reload", "", () => (ol?.url ? mtRefresh(true) : toggleSettings(true))]] : []),
@@ -2035,15 +2037,49 @@ function wxStart() {
   wxSeed(); wxNext = performance.now() + 4e3; wxRaf = requestAnimationFrame(wxFrame);
 }
 function wxShow(kind) { wxPrev = kind; if (prefs.wx === "off" && kind) { prefs.wx = "on"; save(); syncPrefsUI(); } wxStart(); }
+/* what the sky is doing, in words and a small line icon; temperatures in C or F (follows your region until you choose) */
+const WXI = { clear: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>', night: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  partly: '<circle cx="8" cy="8" r="3"/><path d="M8 2v1.5M2 8h1.5M3.8 3.8l1 1M12.2 3.8l-1 1"/><path d="M9 20h8.5a3.5 3.5 0 0 0 .5-6.95A4.8 4.8 0 0 0 9 13.5 3.25 3.25 0 0 0 9 20z"/>', clouds: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.5 4.25 4.25 0 0 0 7 18z"/>',
+  rain: '<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6.5 4.25 4.25 0 0 0 7 15z"/><path d="M8 18l-1 3M12 18l-1 3M16 18l-1 3"/>', storm: '<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6.5 4.25 4.25 0 0 0 7 15z"/><path d="M12.5 14l-2.5 4h3l-2 4"/>',
+  snow: '<path d="M7 15h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 6.5 4.25 4.25 0 0 0 7 15z"/><path d="M8 19h.01M12 21h.01M16 19h.01" stroke-width="2.4"/>', mist: '<path d="M4 9h16M6 13h12M4 17h16"/>' };
+const wxIcon = (code, day = true, s = 16) => { const k = code <= 1 ? (day ? "clear" : "night") : code === 2 ? "partly" : code === 3 ? "clouds" : code === 45 || code === 48 ? "mist" : code >= 95 ? "storm" : (code >= 71 && code <= 77) || code === 85 || code === 86 ? "snow" : "rain"; return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WXI[k]}</svg>`; };
+const wxWords = (c) => ({ 0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains", 80: "Showers", 81: "Showers", 82: "Heavy showers", 85: "Snow showers", 86: "Snow showers", 95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm" })[c] || "Clear";
+const useF = () => (prefs.units || (/^America\//.test(Intl.DateTimeFormat().resolvedOptions().timeZone) && /^en-US/.test(navigator.language) ? "f" : "c")) === "f";
+const deg = (c) => (c == null ? "–" : Math.round(useF() ? c * 9 / 5 + 32 : c) + "°");
+const wxKm = (k) => (useF() ? `${Math.round(k * .621)} mph` : `${Math.round(k)} km/h`);
+const wxDay = (k) => wxData?.daily?.[k];
+function renderWx() {
+  const w = wxData, chip = $("#wxChip"); if (!w?.v) return void (chip.hidden = true);
+  chip.innerHTML = `${wxIcon(w.code, w.day)}<span>${deg(w.temp)}</span>`; chip.hidden = false; chip.title = `${wxWords(w.code)}, ${deg(w.temp)}`;
+  if (!$("#wxPop").hidden) drawWx(); if (!$("#cal").hidden) drawCal();
+}
+function drawWx() {
+  const w = wxData; if (!w?.v) return;
+  const hrs = (w.hours || []).filter((_, i) => i % 2 === 0).slice(0, 6), days = Object.entries(w.daily || {}).slice(1, 6), td = w.daily?.[Object.keys(w.daily || {})[0]];
+  const hh = (s) => hhmm(new Date(s).getTime());
+  $("#wxPop").innerHTML = `<div class="mphead"><span class="wxbig">${wxIcon(w.code, w.day, 44)}</span><div><h3>${deg(w.temp)} · ${esc(wxWords(w.code))}</h3><p>Feels ${deg(w.feels)}${td ? ` · ${deg(td.hi)} / ${deg(td.lo)}` : ""}</p></div></div>`
+    + `<div class="mprow"><span><small>Rain</small><b class="mono">${w.rain != null ? w.rain + "%" : "–"}</b></span><span><small>Humidity</small><b class="mono">${w.hum ?? "–"}%</b></span><span class="r"><small>Wind</small><b class="mono">${wxKm(w.wind ?? 0)}</b></span></div>`
+    + (hrs.length ? `<div class="wxhrs">${hrs.map((x, i) => `<span><small>${i ? hh(x.t) : "Now"}</small>${wxIcon(x.c, x.d, 18)}<b>${deg(x.T)}</b></span>`).join("")}</div>` : "")
+    + (days.length ? `<ul class="wxdays">${days.map(([k, v]) => `<li><span>${new Date(k + "T00:00").toLocaleDateString(undefined, { weekday: "short" })}</span>${wxIcon(v.c, true, 16)}<small>${v.p >= 30 ? v.p + "%" : ""}</small><b>${deg(v.hi)}</b><i>${deg(v.lo)}</i></li>`).join("")}</ul>` : "");
+}
+function wxToggle(on = $("#wxPop").hidden) { if (on) drawWx(); $("#wxPop").hidden = !on; $("#wxChip").setAttribute("aria-expanded", on); }
+$("#wxChip").onclick = (e) => { e.stopPropagation(); wxToggle(); };
+document.addEventListener("click", (e) => { if (!$("#wxPop").hidden && !e.target.closest("#wxPop, #wxChip")) wxToggle(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#wxPop").hidden) { wxToggle(false); $("#wxChip").focus(); } });
+const wxApply = () => { wxStart(); renderWx(); };
 async function wxFetch() {
-  const P = place();
-  try { const c = JSON.parse(localStorage["dayboard:wx"]); if (c.city === P.name && Date.now() - c.t < 18e5) { wxData = c; return wxStart(); } } catch {}
+  const P = place(); let stale = null;
+  try { const c = JSON.parse(localStorage["dayboard:wx"]); if (c.v === 2 && c.city === P.name) { stale = c; if (Date.now() - c.t < 18e5) { wxData = c; return wxApply(); } } } catch {}
   try {
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${P.lat}&longitude=${P.lon}&current=weather_code,cloud_cover`, { signal: AbortSignal.timeout(10000) }).then((x) => x.json());
-    wxData = { city: P.name, t: Date.now(), code: r.current.weather_code, cloud: r.current.cloud_cover };
+    const q = `latitude=${P.lat}&longitude=${P.lon}&timezone=auto&forecast_days=8&forecast_hours=14&current=temperature_2m,apparent_temperature,weather_code,cloud_cover,relative_humidity_2m,wind_speed_10m,is_day`
+      + `&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, { signal: AbortSignal.timeout(10000) }).then((x) => x.json()), c = r.current, d = r.daily;
+    wxData = { v: 2, city: P.name, t: Date.now(), code: c.weather_code, cloud: c.cloud_cover, temp: c.temperature_2m, feels: c.apparent_temperature, hum: c.relative_humidity_2m, wind: c.wind_speed_10m, day: !!c.is_day, rain: d.precipitation_probability_max?.[0] ?? null,
+      hours: r.hourly.time.map((t, i) => ({ t, T: r.hourly.temperature_2m[i], c: r.hourly.weather_code[i], d: !!r.hourly.is_day[i] })),
+      daily: Object.fromEntries(d.time.map((k, i) => [k, { c: d.weather_code[i], hi: d.temperature_2m_max[i], lo: d.temperature_2m_min[i], p: d.precipitation_probability_max[i] }])) };
     try { localStorage["dayboard:wx"] = JSON.stringify(wxData); } catch {}
-  } catch {} // offline: keep the last sky
-  wxStart();
+  } catch { if (stale) wxData = stale; } // offline: keep the last sky
+  wxApply();
 }
 addEventListener("resize", () => { clearTimeout(wxRz); wxRz = setTimeout(wxStart, 250); }); let wxRz;
 document.addEventListener("visibilitychange", () => { if (!document.hidden && wxKind !== "clear" && !wxRaf) wxRaf = requestAnimationFrame(wxFrame); });
@@ -2609,7 +2645,7 @@ function drawWeek(dueOn) {
   per.forEach((L, i) => L.filter((e) => !e.ad).forEach((e) => { const a = Math.max(e.s, dayStart(keys[i])), z = Math.min(e.e, dayStart(keys[i]) + 864e5); lo = Math.min(lo, Math.floor((a - dayStart(keys[i])) / 36e5)); hi = Math.max(hi, Math.ceil((z - dayStart(keys[i])) / 36e5)); }));
   hi = Math.min(24, Math.max(hi, lo + 6)); lo = Math.max(0, Math.min(lo, hi - 6));
   const now = Date.now();
-  let head = `<i></i>` + days.map((d, i) => { const f = fest[keys[i]] || []; return `<button type="button" class="wkd${keys[i] === todayK ? " today" : ""}${keys[i] === calSel ? " sel" : ""}${(d.getDay() + 6) % 7 >= 5 ? " wknd" : ""}" data-d="${keys[i]}"><small>${d.toLocaleDateString(undefined, { weekday: "short" })}</small><b>${d.getDate()}</b>${f.length ? `<span class="wkf">${esc(f[0][0])}</span>` : ""}</button>`; }).join("");
+  let head = `<i></i>` + days.map((d, i) => { const f = fest[keys[i]] || []; return `<button type="button" class="wkd${keys[i] === todayK ? " today" : ""}${keys[i] === calSel ? " sel" : ""}${(d.getDay() + 6) % 7 >= 5 ? " wknd" : ""}" data-d="${keys[i]}"><small>${d.toLocaleDateString(undefined, { weekday: "short" })}</small><b>${d.getDate()}</b>${wxDay(keys[i]) ? `<span class="wkw">${wxIcon(wxDay(keys[i]).c, true, 12)}${deg(wxDay(keys[i]).hi)}</span>` : ""}${f.length ? `<span class="wkf">${esc(f[0][0])}</span>` : ""}</button>`; }).join("");
   const adRow = per.some((L) => L.some((e) => e.ad)) ? `<div class="wkad"><i>all day</i>${per.map((L) => `<div>${L.filter((e) => e.ad).map((e) => `<button type="button" class="mc ad${e.id === calEv ? " on" : ""}" data-e="${esc(e.id)}" data-d="${lday(e.s)}">${esc(e.t)}</button>`).join("")}</div>`).join("")}</div>` : "";
   const hrs = [...Array(hi - lo)].map((_, i) => `<span style="top:${i * HR}px">${hhmm(new Date(2000, 0, 1, lo + i).getTime())}</span>`).join("");
   const cols = per.map((L, i) => {
@@ -2633,7 +2669,8 @@ function evDetail(e) {
 }
 function drawCalSide(dueOn) {
   const sd = new Date(calSel + "T00:00"), f = fest[calSel] || [], tk = (dueOn || {})[calSel] || [], me = ol?.url ? evOn(calSel) : [];
-  $("#calDayH").textContent = sd.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const wd = wxDay(calSel);
+  $("#calDayH").innerHTML = esc(sd.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })) + (wd ? `<span class="calwx">${wxIcon(wd.c, true, 13)}${deg(wd.hi)} / ${deg(wd.lo)}</span>` : "");
   const mrows = me.map((e) => `<li class="mt${e.id === calEv ? " open" : ""}${!e.ad && e.e < Date.now() ? " past" : ""}" data-e="${esc(e.id)}" tabindex="0" role="button" aria-expanded="${e.id === calEv}"><b>${e.ad ? "All day" : hhmm(e.s)}</b><span class="mtl">${esc(e.t)}<small>${e.ad ? "" : `${hhmm(e.s)} – ${hhmm(e.e)} · `}${durText(e)}${e.loc ? ` · ${esc(e.loc)}` : ""}${e.tent ? " · tentative" : ""}</small>${e.id === calEv ? evDetail(e) : ""}</span></li>`).join("");
   $("#calDay").innerHTML = (f.map((x) => `<li><b></b><span>${esc(x[0])}<small>${x[1] ? "Public holiday" : "Festival"}${x[2] ? " · date may shift with the moon" : ""}</small></span></li>`).join("")
     + mrows + tk.map((t) => `<li><b>Due</b><span>${esc(t.title)}<small>${esc(t.proj)}</small></span></li>`).join("")) || `<li class="none">Nothing marked for this day.</li>`;
