@@ -2409,18 +2409,18 @@ function renderRings() {
   const fr = timeFractions();
   if (!el.firstChild) el.innerHTML = `<span class="rdisc">${RING.map(([, I], i) => `<i class="rt" data-i="${i}" style="--r:${RING_R[i]}px"></i><i class="rf" data-i="${i}" style="--r:${RING_R[i]}px;--k:${I};--f:0"></i>`).join("")}<canvas class="rcv"></canvas><span class="rmid"><b></b></span></span><ul class="rleg">${RING.map(([n, I], i) => `<li data-i="${i}"><i style="background:rgba(255,255,255,${(.25 + .7 * I).toFixed(2)})"></i><b>${n}</b><span></span></li>`).join("")}</ul>`;
   const cv = el.querySelector("canvas"), bands = el.querySelectorAll(".rf"); el.dataset.f = fr.map(([f]) => f.toFixed(4)).join(" ");
-  el.querySelector(".rmid b").textContent = `${Math.round(fr[0][0] * 100)}%`;
   el.querySelectorAll(".rleg span").forEach((s, i) => (s.textContent = leftText((1 - fr[i][0]) * fr[i][1] * 864e5)));
   el.setAttribute("aria-label", "Time passing. " + fr.map(([f], i) => `${RING[i][0]} ${Math.round(f * 100)} percent`).join(", "));
-  ringFr = fr;
+  ringFr = fr; rmid();
   const paint = (k) => { bands.forEach((n, i) => n.style.setProperty("--f", Math.max(fr[i][0] * k, .004).toFixed(4))); drawRims(cv, fr, k); };
   if (ringsShown) return paint(1);
   ringsShown = true; const t0 = performance.now(); // the first time, the rings sweep in
   const step = (t) => { const k = Math.min(1, (t - t0) / 1200); paint(1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
 }
+const rmid = () => { const b = $("#rings .rmid b"); if (b && ringFr) b.textContent = `${Math.round(ringFr[ringHot < 0 ? 0 : ringHot][0] * 100)}%`; }; // the middle shows the day, or the ring you point at
 function setRingHot(i) { // light one ring (and its legend row), dim the others
-  if (i === ringHot) return; ringHot = i; const el = $("#rings"); el.classList.toggle("hovering", i >= 0);
+  if (i === ringHot) return; ringHot = i; rmid(); const el = $("#rings"); el.classList.toggle("hovering", i >= 0);
   el.querySelectorAll(".rdisc i").forEach((n) => n.classList.toggle("hot", +n.dataset.i === i)); el.querySelectorAll(".rleg li").forEach((n) => n.classList.toggle("hot", +n.dataset.i === i));
   if (ringFr) drawRims(el.querySelector("canvas"), ringFr, 1);
 }
