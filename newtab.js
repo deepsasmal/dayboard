@@ -2479,7 +2479,7 @@ renderRings(); setInterval(live(renderRings), 3e4);
 $("#rings").onclick = () => openTime();
 
 /* ---------- the time view: every week of a long life as a dot, and the year as one dot per day ---------- */
-let tTab = "life", tGeo = null, tEditing = false; // tEditing: changing the birth date without losing the saved one until you submit
+let tWH = "", tTab = "life", tGeo = null, tEditing = false; // tEditing: changing the birth date without losing the saved one until you submit
 try { tTab = localStorage["dayboard:ttab"] === "year" ? "year" : "life"; } catch {}
 const fmtD = (d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 function closeTime() { tEditing = false; document.activeElement?.blur?.(); $("#timev").hidden = true; document.body.classList.remove("sorting"); $("#tTip").hidden = true; }
@@ -2496,7 +2496,7 @@ function drawTime() {
 }
 function setupCanvas() {
   const w = $("#tWrap"), cv = $("#tCv"), dpr = Math.min(devicePixelRatio || 1, 2), W = w.clientWidth, H = w.clientHeight;
-  cv.width = W * dpr; cv.height = H * dpr; const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H); return { x, W, H };
+  tWH = W + "x" + H; cv.width = W * dpr; cv.height = H * dpr; const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H); return { x, W, H };
 }
 function drawLife() {
   const birth = new Date(prefs.birth + "T00:00"), years = prefs.lifespan || 80, weeksLived = Math.floor((Date.now() - birth) / (7 * 864e5)), total = years * 52;
@@ -2548,7 +2548,8 @@ $("#tSetup").onsubmit = (e) => { e.preventDefault(); const v = $("#tBirth").valu
 $("#tNote").onclick = (e) => { if (e.target.closest("#tChange")) { tEditing = true; drawTime(); } };
 $("#timeX").onclick = closeTime;
 $("#timeBtn").onclick = () => setTimeout(() => openTime(), 60);
-addEventListener("resize", () => { if (!$("#timev").hidden) drawTime(); });
+/* the title text above the canvas can reflow the box after drawing; redraw whenever its real size differs from what we drew for, so the today dot never drifts */
+new ResizeObserver(() => { const w = $("#tWrap"); if (!$("#timev").hidden && w.clientWidth + "x" + w.clientHeight !== tWH) drawTime(); }).observe($("#tWrap"));
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openTime(); } });
 
 /* ---------- calendar: a month grid with the famous Indian festivals, from Google's public "Holidays in India" calendar ---------- */
