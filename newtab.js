@@ -8,7 +8,7 @@ const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice
 /* ---------- storage (chrome.storage, localStorage fallback for plain-file preview) ---------- */
 const store = {
   async get() {
-    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook"]);
+    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol"]);
     return JSON.parse(localStorage.dayboard || "{}");
   },
   set(o) {
@@ -1147,7 +1147,7 @@ store.get().then((s) => { tasks = s.tasks || []; projects = s.projects || projec
     SEED.filter((x) => x[2] === "@dock").forEach(([name, url]) => links.push({ id: crypto.randomUUID(), name, url, proj: null, dock: true }));
     store.set({ dockSeeded: true }); s.links = null;
   }
-  if (!s.links || s.dirty) save(); notes = s.notes || ""; saved = s.saved || []; if (notes.trim()) { saved.unshift({ id: crypto.randomUUID(), title: titleOf(notes), body: notes, proj: null, ts: Date.now() }); notes = ""; store.set({ saved, notes }); } cur = [...saved].sort((x, y) => y.ts - x.ts)[0]?.id ?? null; mtg = s.meeting || null; hook = s.hook || null; hookUI(); mtBtn(); showNote(); render(); syncPrefsUI(); tick(); if (prefs.art !== "both" && !pin) applyArt(); takeSnap(); wxStart(); });
+  if (!s.links || s.dirty) save(); notes = s.notes || ""; saved = s.saved || []; if (notes.trim()) { saved.unshift({ id: crypto.randomUUID(), title: titleOf(notes), body: notes, proj: null, ts: Date.now() }); notes = ""; store.set({ saved, notes }); } cur = [...saved].sort((x, y) => y.ts - x.ts)[0]?.id ?? null; mtg = s.meeting || null; hook = s.hook || null; ol = HAS_OL ? s.ol || null : null; olUI(); mtBoot(); hookUI(); mtBtn(); showNote(); render(); syncPrefsUI(); tick(); if (prefs.art !== "both" && !pin) applyArt(); takeSnap(); wxStart(); });
 
 /* ---------- calm mode (Z) and idle fade: the interface steps back, the painting stays ---------- */
 const body = document.body;
@@ -1783,7 +1783,9 @@ const palCmds = () => [
   ["Calm mode", "calm quiet fade", "Z", () => setCalm(!isCalm())],
   ["Life in weeks", "time life weeks dots years lived remaining mortality", "W", () => setTimeout(() => openTime("life"), 60)],
   ["Year in dots", "time year days dots left progress", "", () => setTimeout(() => openTime("year"), 60)],
-  ["Calendar", "calendar month festivals holidays india diwali holi", "C", () => setTimeout(openCal, 60)],
+  ["Calendar", "calendar month festivals holidays india diwali holi meetings", "C", () => setTimeout(() => openCal(), 60)],
+  ["Calendar: week view", "week calendar meetings schedule timeline agenda", "", () => setTimeout(() => { calMode = "week"; try { localStorage["dayboard:calmode"] = "week"; } catch {} openCal(); }, 60)],
+  ...(HAS_OL ? [["Refresh meetings", "outlook meetings calendar sync refresh reload", "", () => (ol?.url ? mtRefresh(true) : toggleSettings(true))]] : []),
   ["One minute breath", "breathe breath pause calm minute reset", "B", () => setTimeout(openBreath, 60)],
   ["Open the day", "morning ritual start begin day intention breathe", "O", () => setTimeout(openDay, 60)],
   ["Look closer", "zoom detail picture painting closer magnify", "L", () => setTimeout(lookStart, 60)],
@@ -2432,40 +2434,161 @@ async function festLoad() { // the full feed once a month; failure just keeps wh
     if (!$("#cal").hidden) drawCal();
   } catch {}
 }
-let calY = 0, calM = 0, calSel = "";
+/* ---------- meetings: Outlook's published ICS link, read-only (extension only; ics.js parses it) ---------- */
+let ol = null, mt = { ev: [], at: 0, err: "" }, mtBusy = false;
+const HAS_OL = !!globalThis.chrome?.runtime?.id && !!globalThis.ICS;
+try { const c = JSON.parse(localStorage["dayboard:mtgs"] || "null"); if (c?.ev) mt = { ev: c.ev, at: c.at || 0, err: "" }; } catch {}
 const dkey = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-function openCal(day) {
-  const t = day ? new Date(day + "T00:00") : new Date(); calY = t.getFullYear(); calM = t.getMonth(); calSel = day || dkey(t.getFullYear(), t.getMonth(), t.getDate());
+const lday = (ms) => { const d = new Date(ms); return dkey(d.getFullYear(), d.getMonth(), d.getDate()); };
+const dayStart = (k) => new Date(k + "T00:00").getTime();
+const evOn = (k) => { const a = dayStart(k), b = new Date(a).setDate(new Date(a).getDate() + 1); return mt.ev.filter((e) => e.s < b && (e.e > a || e.s >= a)).sort((x, y) => (y.ad - x.ad) || x.s - y.s); };
+const durText = (e) => { if (e.ad) { const n = Math.max(1, Math.round((e.e - e.s) / 864e5)); return n > 1 ? `${n} days` : "All day"; } const m = Math.round((e.e - e.s) / 6e4); return !m ? "" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`; };
+const inText = (ms) => { const m = Math.max(1, Math.round(ms / 6e4)); return m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${Math.round(m / 1440)} d`; };
+const agoText = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+const olSay = (s, bad) => { const m = $("#olMsg"); if (m) { m.textContent = s; m.classList.toggle("bad", !!bad); } };
+function olUI() {
+  $("#olSec").hidden = !HAS_OL; $("#calRefresh").hidden = !ol?.url;
+  $("#olUrl").placeholder = ol ? "Link saved (hidden)" : "https://outlook.office365.com/owa/calendar/…/calendar.ics";
+  $("#olOn").textContent = ol ? "Replace" : "Connect"; $("#olNow").hidden = $("#olOff").hidden = !ol;
+  if (ol) olSay(mt.err ? `Last refresh failed: ${mt.err}` : mt.at ? `${mt.ev.length} events. Updated ${agoText(mt.at)}.` : "Connected. Reading your calendar…", !!mt.err); else olSay("");
+}
+function mtChanged() { olUI(); renderNextMtg(); if (!$("#cal").hidden) drawCal(); }
+async function mtRefresh(manual) {
+  if (!ol?.url || mtBusy) return; mtBusy = true; $("#calRefresh").classList.add("busy"); if (manual) olSay("Refreshing…");
+  try {
+    const r = await fetch(ol.url, { cache: "no-store", signal: AbortSignal.timeout(25000) });
+    if (!r.ok) throw { msg: r.status === 404 ? "Outlook says the link no longer exists. Publish the calendar again and paste the new link." : r.status === 401 || r.status === 403 ? "Outlook refused the link." : `Outlook answered ${r.status}.` };
+    const txt = await r.text(); if (!/BEGIN:VCALENDAR/.test(txt)) throw { msg: "That link did not return a calendar. Use the ICS link, not the HTML one." };
+    const t = Date.now(), ev = ICS.parse(txt, t - 35 * 864e5, t + 200 * 864e5).slice(0, 2500);
+    mt = { ev, at: Date.now(), err: "" }; try { localStorage["dayboard:mtgs"] = JSON.stringify({ ev, at: mt.at }); } catch {}
+  } catch (e) { mt.err = e.msg || (e.name === "TimeoutError" ? "Outlook took too long to answer." : "Could not reach Outlook. Showing the last copy."); }
+  finally { mtBusy = false; $("#calRefresh").classList.remove("busy"); mtChanged(); }
+}
+function mtBoot() { if (ol?.url && Date.now() - mt.at > 10 * 6e4) mtRefresh(false); renderNextMtg(); }
+setInterval(() => { if (ol?.url) { if (Date.now() - mt.at > 15 * 6e4) mtRefresh(false); renderNextMtg(); } }, 3e4);
+$("#olOn").onclick = async () => {
+  let u = $("#olUrl").value.trim().replace(/^webcal:/i, "https:").replace(/\/calendar\.html(\?.*)?$/i, "/calendar.ics"), url;
+  try { url = new URL(u); } catch { return olSay("That does not look like a link.", true); }
+  if (url.protocol !== "https:" && !/^(localhost|127\.0\.0\.1)$/.test(url.hostname)) return olSay("The link must start with https.", true);
+  if (/\.html?$/i.test(url.pathname)) return olSay("That is the web view. Paste the ICS link (it ends in .ics).", true);
+  if (globalThis.chrome?.permissions) { // other calendar hosts ask once
+    const o = [url.protocol + "//" + url.hostname + "/*"];
+    if (!(await chrome.permissions.contains({ origins: o }).catch(() => false)) && !(await chrome.permissions.request({ origins: o }).catch(() => false))) return olSay("Chrome needs your OK to read that address. Try Connect again.", true);
+  }
+  ol = { url: url.href }; $("#olUrl").value = ""; mt = { ev: [], at: 0, err: "" }; await store.set({ ol }); olUI(); await mtRefresh(true);
+  if (!mt.err) olSay(`Connected. ${mt.ev.length} events read.`);
+};
+$("#olNow").onclick = () => mtRefresh(true);
+$("#olOff").onclick = async () => { ol = null; mt = { ev: [], at: 0, err: "" }; try { localStorage.removeItem("dayboard:mtgs"); } catch {} await store.set({ ol: null }); mtChanged(); olSay("Removed. Delete the published link in Outlook too if you like."); };
+$("#calRefresh").onclick = () => mtRefresh(true);
+function renderNextMtg() {
+  const b = $("#nextMtg"); if (!ol?.url) return void (b.hidden = true);
+  const now = Date.now(), eod = new Date().setHours(23, 59, 59, 999);
+  const L = mt.ev.filter((e) => !e.ad && !e.free && e.e > now && e.s <= eod).sort((x, y) => x.s - y.s), cur = L.find((e) => e.s <= now), e = cur || L[0];
+  if (!e) return void (b.hidden = true);
+  const soon = !cur && e.s - now < 10 * 6e4;
+  b.textContent = cur ? `Now · ${e.t} · until ${hhmm(e.e)}` : e.s - now < 60 * 6e4 ? `${e.t} · in ${inText(e.s - now)}` : `Next · ${e.t} · ${hhmm(e.s)}`;
+  b.classList.toggle("soon", soon || !!cur); b.dataset.e = e.id; b.dataset.d = lday(e.s); b.hidden = false;
+}
+$("#nextMtg").onclick = (e) => openCal(e.currentTarget.dataset.d, e.currentTarget.dataset.e);
+
+/* ---------- calendar (month and week) with festivals, due tasks and meetings ---------- */
+let calY = 0, calM = 0, calSel = "", calEv = "", calMode = "month";
+try { calMode = localStorage["dayboard:calmode"] === "week" ? "week" : "month"; } catch {}
+function openCal(day, evId) {
+  const t = day ? new Date(day + "T00:00") : new Date(); calY = t.getFullYear(); calM = t.getMonth(); calSel = day || dkey(t.getFullYear(), t.getMonth(), t.getDate()); calEv = evId || "";
   ["#menu", "#wpPop", "#bkPop", "#story", "#settings"].forEach((s) => { $(s).hidden = true; });
   $("#cal").hidden = false; document.body.classList.add("sorting"); drawCal(); $("#cal").focus(); festLoad();
+  if (calEv && $("#calDay .mt.open")) $("#calDay .mt.open").scrollIntoView({ block: "nearest" });
+  if (ol?.url && Date.now() - mt.at > 5 * 6e4) mtRefresh(false);
 }
 function closeCal() { document.activeElement?.blur?.(); $("#cal").hidden = true; document.body.classList.remove("sorting"); }
+const weekStart = (k) => { const d = new Date(k + "T00:00"); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
 function drawCal() {
-  const first = new Date(calY, calM, 1), lead = (first.getDay() + 6) % 7, dim = new Date(calY, calM + 1, 0).getDate(), todayK = today(), now = new Date();
+  const wk = calMode === "week"; document.querySelectorAll("#calMode [data-m]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === calMode));
+  $("#calGrid").hidden = wk; $("#calWeek").hidden = !wk; $("#calRefresh").hidden = !ol?.url;
+  $("#calRefresh").title = mt.err ? `Refresh meetings. Last try failed: ${mt.err}` : mt.at ? `Refresh meetings. Updated ${agoText(mt.at)}.` : "Refresh meetings";
+  $("#calRefresh").classList.toggle("bad", !!mt.err);
+  const dueOn = {}; open().forEach((t) => { if (t.due) (dueOn[t.due] ||= []).push(t); });
+  if (wk) drawWeek(dueOn); else drawMonth(dueOn);
+  drawCalSide(dueOn);
+}
+function drawMonth(dueOn) {
+  const first = new Date(calY, calM, 1), lead = (first.getDay() + 6) % 7, todayK = today(), now = new Date();
   const cwStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)); // this week's Monday, to tint the current week's row
   $("#calTitle").textContent = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const dueOn = {}; open().forEach((t) => { if (t.due) (dueOn[t.due] ||= []).push(t); });
   let html = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => `<div class="calwd" role="columnheader">${w}</div>`).join("");
   for (let i = 0; i < 42; i++) {
-    const d = new Date(calY, calM, 1 - lead + i), k = dkey(d.getFullYear(), d.getMonth(), d.getDate()), f = fest[k] || [], inM = d.getMonth() === calM, wk = (d.getDay() + 6) % 7 >= 5, tk = dueOn[k] || [];
+    const d = new Date(calY, calM, 1 - lead + i), k = dkey(d.getFullYear(), d.getMonth(), d.getDate()), f = fest[k] || [], inM = d.getMonth() === calM, wkd = (d.getDay() + 6) % 7 >= 5, tk = dueOn[k] || [], me = ol?.url ? evOn(k).filter((e) => !e.free || e.ad) : [];
     const cw = d >= cwStart && d < new Date(cwStart.getFullYear(), cwStart.getMonth(), cwStart.getDate() + 7);
-    html += `<button type="button" class="calc${inM ? "" : " out"}${wk ? " wknd" : ""}${k === todayK ? " today" : ""}${f.length ? " fest" : ""}${f.some((x) => x[1]) ? " pub" : ""}${k === calSel ? " sel" : ""}${cw ? " cw" : ""}" data-d="${k}" role="gridcell" aria-label="${esc(d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}${f.length ? ". " + esc(f.map((x) => x[0]).join(", ")) : ""}"><b>${d.getDate()}</b>${f.length ? `<span class="fn">${esc(f[0][0])}${f.length > 1 ? `<small>+ ${esc(f[1][0])}${f.length > 2 ? " …" : ""}</small>` : ""}</span>` : ""}${tk.length ? `<span class="tdots" aria-hidden="true">${tk.slice(0, 3).map(() => "<i></i>").join("")}</span>` : ""}</button>`;
+    const chips = me.slice(0, 2).map((e) => `<span class="mc${e.ad ? " ad" : ""}${e.tent ? " tent" : ""}">${e.ad ? "" : `<i>${hhmm(e.s)}</i> `}${esc(e.t)}</span>`).join("") + (me.length > 2 ? `<span class="mc more">+${me.length - 2} more</span>` : "");
+    html += `<button type="button" class="calc${inM ? "" : " out"}${wkd ? " wknd" : ""}${k === todayK ? " today" : ""}${f.length ? " fest" : ""}${f.some((x) => x[1]) ? " pub" : ""}${k === calSel ? " sel" : ""}${cw ? " cw" : ""}" data-d="${k}" role="gridcell" aria-label="${esc(d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}${f.length ? ". " + esc(f.map((x) => x[0]).join(", ")) : ""}${me.length ? `. ${me.length} meeting${me.length > 1 ? "s" : ""}` : ""}"><b>${d.getDate()}</b>${f.length ? `<span class="fn">${esc(f[0][0])}${f.length > 1 ? `<small>+ ${esc(f[1][0])}${f.length > 2 ? " …" : ""}</small>` : ""}</span>` : ""}${chips}${me.length ? `<span class="mcount" aria-hidden="true">${me.length}</span>` : ""}${tk.length ? `<span class="tdots" aria-hidden="true">${tk.slice(0, 3).map(() => "<i></i>").join("")}</span>` : ""}</button>`;
   }
-  $("#calGrid").innerHTML = html; drawCalSide(dueOn);
+  $("#calGrid").innerHTML = html;
+}
+const HR = 48; // px per hour in the week grid
+function drawWeek(dueOn) {
+  const ws = weekStart(calSel), days = [...Array(7)].map((_, i) => { const d = new Date(ws); d.setDate(ws.getDate() + i); return d; }), keys = days.map((d) => dkey(d.getFullYear(), d.getMonth(), d.getDate()));
+  const we = days[6], sameM = ws.getMonth() === we.getMonth();
+  $("#calTitle").textContent = `${ws.getDate()}${sameM ? "" : " " + ws.toLocaleDateString(undefined, { month: "short" })} – ${we.getDate()} ${we.toLocaleDateString(undefined, { month: "short", year: "numeric" })}`;
+  const meet = ol?.url, per = keys.map((k) => (meet ? evOn(k) : []).filter((e) => !e.free || e.ad)), todayK = today();
+  let lo = 8, hi = 19;
+  per.forEach((L, i) => L.filter((e) => !e.ad).forEach((e) => { const a = Math.max(e.s, dayStart(keys[i])), z = Math.min(e.e, dayStart(keys[i]) + 864e5); lo = Math.min(lo, Math.floor((a - dayStart(keys[i])) / 36e5)); hi = Math.max(hi, Math.ceil((z - dayStart(keys[i])) / 36e5)); }));
+  hi = Math.min(24, Math.max(hi, lo + 6)); lo = Math.max(0, Math.min(lo, hi - 6));
+  const now = Date.now();
+  let head = `<i></i>` + days.map((d, i) => { const f = fest[keys[i]] || []; return `<button type="button" class="wkd${keys[i] === todayK ? " today" : ""}${keys[i] === calSel ? " sel" : ""}${(d.getDay() + 6) % 7 >= 5 ? " wknd" : ""}" data-d="${keys[i]}"><small>${d.toLocaleDateString(undefined, { weekday: "short" })}</small><b>${d.getDate()}</b>${f.length ? `<span class="wkf">${esc(f[0][0])}</span>` : ""}</button>`; }).join("");
+  const adRow = per.some((L) => L.some((e) => e.ad)) ? `<div class="wkad"><i>all day</i>${per.map((L) => `<div>${L.filter((e) => e.ad).map((e) => `<button type="button" class="mc ad${e.id === calEv ? " on" : ""}" data-e="${esc(e.id)}" data-d="${lday(e.s)}">${esc(e.t)}</button>`).join("")}</div>`).join("")}</div>` : "";
+  const hrs = [...Array(hi - lo)].map((_, i) => `<span style="top:${i * HR}px">${hhmm(new Date(2000, 0, 1, lo + i).getTime())}</span>`).join("");
+  const cols = per.map((L, i) => {
+    const t0 = dayStart(keys[i]), ev = L.filter((e) => !e.ad).map((e) => ({ e, a: Math.max(e.s, t0), z: Math.min(Math.max(e.e, e.s + 15 * 6e4), t0 + 864e5) })), lane = [], out = [];
+    let g = [], gEnd = 0; const close = () => { const n = Math.max(1, ...g.map((x) => x.l + 1)); g.forEach((x) => (x.n = n)); out.push(...g); g = []; };
+    for (const x of ev) { if (g.length && x.a >= gEnd) { close(); lane.length = 0; gEnd = 0; } let l = lane.findIndex((z) => z <= x.a); if (l < 0) l = lane.length; lane[l] = x.z; x.l = l; g.push(x); gEnd = Math.max(gEnd, x.z); } if (g.length) close();
+    const blocks = out.map((x) => { const top = (x.a - t0) / 36e5 * HR - lo * HR, ht = Math.max(22, (x.z - x.a) / 36e5 * HR - 2), e = x.e;
+      return `<button type="button" class="wke${e.tent ? " tent" : ""}${e.e < now ? " past" : ""}${e.s <= now && e.e > now ? " live" : ""}${e.id === calEv ? " on" : ""}" data-e="${esc(e.id)}" data-d="${keys[i]}" style="top:${top}px;height:${ht}px;left:calc(${x.l / x.n * 100}% + 1px);width:calc(${100 / x.n}% - 3px)"><b>${esc(e.t)}</b>${ht > 34 && x.n === 1 ? `<small>${hhmm(e.s)} – ${hhmm(e.e)}</small>` : ""}</button>`; }).join("");
+    const nowLine = keys[i] === todayK && now >= t0 + lo * 36e5 && now < t0 + hi * 36e5 ? `<u class="wknow" style="top:${(now - t0) / 36e5 * HR - lo * HR}px"></u>` : "";
+    return `<div class="wkcol${keys[i] === todayK ? " today" : ""}${keys[i] === calSel ? " sel" : ""}" data-d="${keys[i]}">${blocks}${nowLine}</div>`;
+  }).join("");
+  $("#calWeek").innerHTML = `<div class="wkh">${head}</div>${adRow}<div class="wkgrid" style="height:${(hi - lo) * HR}px"><div class="wkhrs">${hrs}</div>${cols}</div>${meet || !HAS_OL ? "" : `<p class="calsrc">Add your Outlook calendar link in Preferences to see meetings here.</p>`}`;
+}
+function evDetail(e) {
+  const now = Date.now(), when = e.ad ? new Date(e.s).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) + (e.e - e.s > 864e5 ? ` to ${new Date(e.e - 864e5).toLocaleDateString(undefined, { day: "numeric", month: "long" })}` : "")
+    : `${new Date(e.s).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}, ${hhmm(e.s)} – ${hhmm(e.e)}`;
+  const state = e.ad ? "" : e.s <= now && e.e > now ? `In progress, ends in ${inText(e.e - now)}` : e.s > now ? `Starts in ${inText(e.s - now)}` : "Ended";
+  const link = /^https:\/\//i.test(e.join) ? `<a class="pill solid" href="${esc(e.join)}" target="_blank" rel="noopener">Join meeting</a>` : "";
+  const bits = [e.loc && `<p><span>Where</span>${esc(e.loc)}</p>`, e.org && `<p><span>Organiser</span>${esc(e.org)}</p>`, e.n > 1 && `<p><span>Invited</span>${e.n} people</p>`, e.tent && `<p><span>Status</span>Tentative</p>`, e.free && `<p><span>Shown as</span>Free</p>`].filter(Boolean).join("");
+  return `<div class="mtd"><p class="mtw">${esc(when)}${durText(e) && !e.ad ? ` · ${durText(e)}` : ""}</p>${state ? `<p class="mts">${esc(state)}</p>` : ""}${bits}${e.desc ? `<div class="mtdesc">${esc(e.desc)}</div>` : ""}<div class="mta">${link}<button type="button" class="pill" data-mnotes="${esc(e.id)}">Take notes</button></div></div>`;
 }
 function drawCalSide(dueOn) {
-  const sd = new Date(calSel + "T00:00"), f = fest[calSel] || [], tk = (dueOn || {})[calSel] || [];
+  const sd = new Date(calSel + "T00:00"), f = fest[calSel] || [], tk = (dueOn || {})[calSel] || [], me = ol?.url ? evOn(calSel) : [];
   $("#calDayH").textContent = sd.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const mrows = me.map((e) => `<li class="mt${e.id === calEv ? " open" : ""}${!e.ad && e.e < Date.now() ? " past" : ""}" data-e="${esc(e.id)}" tabindex="0" role="button" aria-expanded="${e.id === calEv}"><b>${e.ad ? "All day" : hhmm(e.s)}</b><span class="mtl">${esc(e.t)}<small>${e.ad ? "" : `${hhmm(e.s)} – ${hhmm(e.e)} · `}${durText(e)}${e.loc ? ` · ${esc(e.loc)}` : ""}${e.tent ? " · tentative" : ""}</small>${e.id === calEv ? evDetail(e) : ""}</span></li>`).join("");
   $("#calDay").innerHTML = (f.map((x) => `<li><b></b><span>${esc(x[0])}<small>${x[1] ? "Public holiday" : "Festival"}${x[2] ? " · date may shift with the moon" : ""}</small></span></li>`).join("")
-    + tk.map((t) => `<li><b>Due</b><span>${esc(t.title)}<small>${esc(t.proj)}</small></span></li>`).join("")) || `<li class="none">Nothing marked for this day.</li>`;
+    + mrows + tk.map((t) => `<li><b>Due</b><span>${esc(t.title)}<small>${esc(t.proj)}</small></span></li>`).join("")) || `<li class="none">Nothing marked for this day.</li>`;
   const mo = Object.keys(fest).filter((k) => k.startsWith(`${calY}-${String(calM + 1).padStart(2, "0")}-`)).sort();
   $("#calMonthH").textContent = `Festivals in ${new Date(calY, calM, 1).toLocaleDateString(undefined, { month: "long" })}`;
   $("#calMonth").innerHTML = mo.length ? mo.map((k) => `<li class="btn" data-d="${k}"><b>${+k.slice(8)}</b><span>${esc(fest[k].map((x) => x[0]).join(" · "))}<small>${new Date(k + "T00:00").toLocaleDateString(undefined, { weekday: "long" })}</small></span></li>`).join("") : `<li class="none">No major festivals this month.</li>`;
-  $("#calSrc").textContent = "Festival dates: Google’s public Holidays in India calendar. Lunar festivals can shift by a day.";
+  $("#calSrc").textContent = "Festival dates: Google’s public Holidays in India calendar. Lunar festivals can shift by a day." + (ol?.url ? ` Meetings: your Outlook calendar${mt.at ? `, updated ${agoText(mt.at)}` : ""}${mt.err ? ` (last refresh failed: ${mt.err})` : ""}.` : "");
 }
-function calGo(dm) { const d = new Date(calY, calM + dm, 1); calY = d.getFullYear(); calM = d.getMonth(); const sel = new Date(calSel + "T00:00"); if (sel.getMonth() !== calM || sel.getFullYear() !== calY) calSel = dkey(calY, calM, 1); drawCal(); }
+function calGo(dm) {
+  if (calMode === "week") { const d = new Date(calSel + "T00:00"); d.setDate(d.getDate() + 7 * dm); calSel = dkey(d.getFullYear(), d.getMonth(), d.getDate()); calY = d.getFullYear(); calM = d.getMonth(); }
+  else { const d = new Date(calY, calM + dm, 1); calY = d.getFullYear(); calM = d.getMonth(); const sel = new Date(calSel + "T00:00"); if (sel.getMonth() !== calM || sel.getFullYear() !== calY) calSel = dkey(calY, calM, 1); }
+  calEv = ""; drawCal();
+}
 $("#calPrev").onclick = () => calGo(-1); $("#calNext").onclick = () => calGo(1); $("#calToday").onclick = () => openCal(); $("#calX").onclick = closeCal;
-$("#cal").addEventListener("click", (e) => { const b = e.target.closest("[data-d]"); if (!b) return; calSel = b.dataset.d; const d = new Date(calSel + "T00:00"); if (d.getMonth() !== calM || d.getFullYear() !== calY) { calY = d.getFullYear(); calM = d.getMonth(); } drawCal(); });
+$("#calMode").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; calMode = b.dataset.m; try { localStorage["dayboard:calmode"] = calMode; } catch {} drawCal(); };
+function mtFor(id) { // "Take notes": Meeting view, filled in from the calendar entry
+  const e = mt.ev.find((x) => x.id === id); if (!e) return;
+  if (!mtg || (!mtg.body.trim() && !mtg.title.trim())) { mtg = { id: crypto.randomUUID(), title: e.t.slice(0, 80), with: e.org, body: "", start: e.s, proj: ui.proj || projects[0] }; mtKeep(); }
+  closeCal(); openMtg();
+}
+$("#cal").addEventListener("click", (e) => {
+  const mn = e.target.closest("[data-mnotes]"); if (mn) return mtFor(mn.dataset.mnotes);
+  if (e.target.closest("a")) return;
+  const ev = e.target.closest("[data-e]");
+  if (ev) { calEv = calEv === ev.dataset.e && ev.closest("#calDay") ? "" : ev.dataset.e; if (ev.dataset.d) calSel = ev.dataset.d; drawCal(); if (calEv) $("#calDay .mt.open")?.scrollIntoView({ block: "nearest" }); return; }
+  const b = e.target.closest("[data-d]"); if (!b) return; calSel = b.dataset.d; calEv = ""; const d = new Date(calSel + "T00:00"); if (d.getMonth() !== calM || d.getFullYear() !== calY) { calY = d.getFullYear(); calM = d.getMonth(); } drawCal();
+});
+$("#cal").addEventListener("keydown", (e) => { const li = e.target.closest?.("#calDay .mt"); if (li && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); li.click(); } });
 $("#weekRow").onclick = () => openCal(); $("#weekRow").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCal(); } };
 addEventListener("keydown", (e) => {
   if (!$("#cal").hidden) { // the calendar has the arrow keys

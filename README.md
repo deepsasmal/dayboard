@@ -46,7 +46,7 @@ Notes are **stored as markdown** (`saved[i] = {id,title,body,proj,ts}`), shown i
 - **Met Collection API.** Object lookups use `v1/objects/<id>`; **search is `v1.1` only**. It returns 403/429 after request bursts, so `libFetch` uses batches of 3 with pauses and a call cap, and backs off ~40 minutes on a 403.
 - **Wikimedia** thumbnails: use width 330 (320 returns 400). **Open-Meteo**, **Wikidata** (`origin=*`) and **Wikipedia REST** allow CORS.
 - **ZenQuotes** and **Google's public iCal** (festivals) do **not** allow CORS from web pages, so here the quote falls back to a local list and the calendar uses bundled 2026-27 data. They work in the extension version through host permissions.
-- Not available on the web: task reminders and golden-hour notifications (need extension alarms), the background daily Discord backup (use Export/Import, the data format is plain JSON), site favicons (letter tiles are shown instead).
+- Not available on the web: Outlook meetings (calendar feeds are not CORS-readable from a web page; the extension edition has them), task reminders and golden-hour notifications (need extension alarms), the background daily Discord backup (use Export/Import, the data format is plain JSON), site favicons (letter tiles are shown instead).
 
 ## Gotchas
 

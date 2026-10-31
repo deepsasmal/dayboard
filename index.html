@@ -81,6 +81,13 @@
   <input id="hookUrl" class="hookin" type="password" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false" aria-label="Discord webhook URL">
   <div class="opts"><button type="button" id="hookOn" class="pill solid">Turn on</button><button type="button" id="hookNow" class="pill">Send now</button><button type="button" id="hookOff" class="pill">Remove</button></div>
   <p id="hookMsg" class="hint" role="status"></p>
+  <div id="olSec" hidden>
+  <h2>Outlook meetings</h2>
+  <p class="hint">Shows your next meeting under the greeting and puts meetings in the calendar. In Outlook on the web: Settings, Calendar, Shared calendars, Publish a calendar, then paste the ICS link here. Dayboard only reads it. The link stays on this device and is never exported.</p>
+  <input id="olUrl" class="hookin" type="password" placeholder="https://outlook.office365.com/owa/calendar/…/calendar.ics" autocomplete="off" spellcheck="false" aria-label="Outlook calendar ICS link">
+  <div class="opts"><button type="button" id="olOn" class="pill solid">Connect</button><button type="button" id="olNow" class="pill">Refresh</button><button type="button" id="olOff" class="pill">Remove</button></div>
+  <p id="olMsg" class="hint" role="status"></p>
+  </div>
   <h2>Recover</h2>
   <p class="hint">Deleted notes and tasks stay here for 30 days.</p>
   <ul id="trashList" class="rlist"></ul>
@@ -129,6 +136,7 @@
       <ol id="week" class="week" aria-label="This week"></ol>
     </div>
     <h1 id="greet"></h1>
+    <button type="button" id="nextMtg" class="nextmtg" hidden title="Open your calendar"></button>
     <button type="button" id="intent" class="intent" hidden title="Your intention for today. Click to change it."></button>
     </div>
     <figure class="paintfig" id="paintFig">
@@ -396,9 +404,12 @@
     <h2 id="calTitle" class="caltitle" aria-live="polite"></h2>
     <button type="button" id="calNext" class="calnav" aria-label="Next month">›</button>
     <button type="button" id="calToday" class="pill">Today</button>
+    <span class="seg calmode" id="calMode" role="group" aria-label="Calendar view"><button type="button" data-m="month">Month</button><button type="button" data-m="week">Week</button></span>
+    <button type="button" id="calRefresh" class="calnav calref" hidden aria-label="Refresh meetings" title="Refresh meetings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
   </div>
   <div class="calbody">
     <div id="calGrid" class="calgrid" role="grid" aria-label="Month"></div>
+    <div id="calWeek" class="calweek" hidden></div>
     <aside class="calside" aria-label="Day and festivals">
       <h3 id="calDayH"></h3>
       <ul id="calDay" class="callist"></ul>
