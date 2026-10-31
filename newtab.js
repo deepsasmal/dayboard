@@ -1,7 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const typingNow = () => /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || document.activeElement.isContentEditable; // the note page is a contenteditable
 const applyPaintHide = () => { const f = $("#paintFig"); if (!f) return; f.classList.toggle("off", !!prefs.paintHide); $("#paintBtn").tabIndex = prefs.paintHide ? -1 : 0; try { localStorage["dayboard:ph"] = prefs.paintHide ? "1" : ""; } catch {} };
-try { document.body.dataset.clock = localStorage["dayboard:cs"] || "solid"; } catch {} // no flash of the wrong clock style
+try { document.body.dataset.clock = localStorage["dayboard:cs"] || "solid"; document.documentElement.style.setProperty("--gt", localStorage["dayboard:gt"] || "1"); } catch {} // no flash of the wrong clock style or glass // no flash of the wrong clock style
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 
@@ -17,7 +17,7 @@ const store = {
   },
 };
 let tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
-let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", clockStyle: "solid", paintHide: false, favs: [], units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
+let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
 const CITIES = [
   { name: "Hyderabad", lat: 17.385, lon: 78.4867, tz: "Asia/Kolkata" }, { name: "Bengaluru", lat: 12.9716, lon: 77.5946, tz: "Asia/Kolkata" },
   { name: "Mumbai", lat: 19.076, lon: 72.8777, tz: "Asia/Kolkata" }, { name: "Delhi", lat: 28.6139, lon: 77.209, tz: "Asia/Kolkata" },
@@ -1229,7 +1229,7 @@ function wake() {
   const now = Date.now();
   if (now - lastWake < 400 && !body.classList.contains("idle")) return; // mousemove fires constantly
   lastWake = now; body.classList.remove("idle"); clearTimeout(idleT);
-  idleT = setTimeout(rest, isCalm() ? 2500 : 20000);
+  idleT = setTimeout(rest, isCalm() ? 15000 : 20000);
 }
 ["mousemove", "pointerdown", "keydown", "wheel", "touchstart", "focusin"].forEach((ev) => addEventListener(ev, wake, { passive: true }));
 function setCalm(on) {
@@ -1326,8 +1326,13 @@ $("#impReplace").onclick = () => applyImport("replace");
 /* ---------- preferences: city, clock, background source ---------- */
 const ago = (ms) => { const d = Math.floor((Date.now() - ms) / 864e5); return d < 1 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 $("#prefCity").innerHTML = CITIES.map((c) => `<option>${esc(c.name)}</option>`).join("");
+/* glass: 0 = solid .. 50 = as designed .. 100 = nearly clear; every panel's fill is multiplied by --gt */
+const glassK = (v) => (v <= 50 ? 1 + (50 - v) / 50 * .6 : 1 - (v - 50) / 50 * .72);
+function applyGlass() { const k = glassK(Number.isFinite(prefs.glass) ? prefs.glass : 50).toFixed(3); document.documentElement.style.setProperty("--gt", k); try { localStorage["dayboard:gt"] = k; } catch {} }
+$("#prefGlass").oninput = (e) => { prefs.glass = +e.target.value; applyGlass(); };
+$("#prefGlass").onchange = () => save();
 function syncPrefsUI() {
-  $("#prefCity").value = place().name;
+  $("#prefCity").value = place().name; $("#prefGlass").value = Number.isFinite(prefs.glass) ? prefs.glass : 50; applyGlass();
   applyPaintHide();
   document.body.dataset.clock = prefs.clockStyle || "solid"; try { localStorage["dayboard:cs"] = prefs.clockStyle || "solid"; } catch {}
   for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"], ["prefRings", "rings"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
@@ -1363,7 +1368,7 @@ setInterval(renderNudge, 6e4);
 let undoT, undoFn = null;
 function undoable(label, fn) {
   undoFn = fn; $("#undoMsg").textContent = label; $("#undo").hidden = false;
-  clearTimeout(undoT); undoT = setTimeout(() => { $("#undo").hidden = true; undoFn = null; }, 8000);
+  clearTimeout(undoT); undoT = setTimeout(() => { $("#undo").hidden = true; undoFn = null; }, 15000);
 }
 $("#undoBtn").onclick = () => {
   const f = undoFn; undoFn = null; $("#undo").hidden = true; clearTimeout(undoT); if (!f) return;
@@ -1886,6 +1891,7 @@ const palCmds = () => [
   ["Wallpaper: my pictures", "wallpaper background mine own upload photos", "", () => setArt("mine")],
   ["Wallpaper: favourites", "wallpaper background favourites favorites hearts liked", "", () => setArt("favs")],
   ["Favourite this wallpaper", "wallpaper heart favourite favorite like keep", "", () => $("#wpFav").click()],
+  ["Glass transparency: reset", "glass transparency frosted clear solid default", "", () => { prefs.glass = 50; save(); syncPrefsUI(); }],
   ["Clock style: frosted", "clock style frosted glass", "", () => $("#prefClockStyle [data-v='frosted']").click()],
   ["Clock style: thin", "clock style thin light", "", () => $("#prefClockStyle [data-v='thin']").click()],
   ["Clock style: solid", "clock style solid bold", "", () => $("#prefClockStyle [data-v='solid']").click()],
