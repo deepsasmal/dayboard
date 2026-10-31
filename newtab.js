@@ -1810,8 +1810,29 @@ function mtTaken(lineIdx) { // mark the line as taken so it can't be added twice
   const ls = mtg.body.split("\n"), m = ls[lineIdx].match(ACT);
   ls[lineIdx] = `${m[1] ?? m[3]}[x] ${m[2] || m[4]}`; mtg.body = ls.join("\n"); $("#mtText").value = mtg.body;
 }
+let foundNow = [], flipped = new Set(); // follow-ups seen in the notes; lines the user said are "mine"
+const mtWho = () => (mtg.with || "").split(",").map((x) => x.trim()).filter(Boolean);
+function mtFollow() {
+  foundNow = FU.find(mtg.body, { who: mtWho(), me: prefs.me || "", today: today() }).map((f) => (flipped.has(f.i + mtg.body.split("\n")[f.i]) ? { ...f, owner: "me", known: true } : f));
+  const f = foundNow, show = f.length > 0;
+  $("#mtFoundH").hidden = $("#mtFound").hidden = !show; $("#mtFN").textContent = f.length || "";
+  $("#mtMe").hidden = !(show && !prefs.me && f.some((x) => x.owner !== "me" && x.known));
+  $("#mtFound").innerHTML = f.map((x) => `<li><span>${esc(x.title)}</span><small class="${x.owner !== "me" ? "w" : ""}">${x.owner === "me" ? "yours" : "waiting on " + esc(x.owner)}${x.due ? " · " + esc(fmtDue(x.due)) : ""}</small>${x.owner !== "me" ? `<button type="button" class="pill soft" data-fum="${x.i}" title="This one is mine">Mine</button>` : ""}<button type="button" class="pill" data-mtf="${x.i}">Add</button></li>`).join("");
+  const owed = open().filter((t) => t.wait && t.mid !== mtg.id && FU.who(t.wait, mtWho())).slice(0, 6);
+  $("#mtOwedH").hidden = $("#mtOwed").hidden = !owed.length; $("#mtON").textContent = owed.length || "";
+  $("#mtOwed").innerHTML = owed.map((t) => `<li><span>${esc(t.title)}</span><small class="w">${esc(t.wait)} · ${esc(fmtDue(t.due))}</small></li>`).join("");
+}
+$("#mtFound").onclick = (e) => {
+  const fl = e.target.closest("[data-fum]"); if (fl) { flipped.add(fl.dataset.fum + mtg.body.split("\n")[+fl.dataset.fum]); return mtRender(); }
+  const b = e.target.closest("[data-mtf]"), f = b && foundNow.find((x) => x.i === +b.dataset.mtf); if (!f) return;
+  const t = mtMake(f.owner === "me" ? f.title : `${f.title} @${f.owner.replace(/\s+/g, "_")}`); if (!t) return;
+  if (f.due) t.due = f.due;
+  const ls = mtg.body.split("\n"); ls[f.i] = ls[f.i].replace(/^(\s*(?:[-*+]\s+)?)/, "$1[x] "); mtg.body = ls.join("\n"); $("#mtText").value = mtg.body;
+  save(); mtKeep(); render(); mtRender();
+};
+$("#mtMe").onkeydown = (e) => { if (e.key !== "Enter") return; e.preventDefault(); prefs.me = e.target.value.trim().slice(0, 40); e.target.value = ""; save(); mtRender(); };
 function mtRender() {
-  if (!mtg) return;
+  if (!mtg) return; mtFollow();
   const acts = mtLines().filter((x) => parse(actText(x.m), 2).title), made = tasks.filter((t) => t.mid === mtg.id);
   $("#mtN").textContent = acts.length || ""; $("#mtCount").textContent = acts.length + made.length || "";
   $("#mtActs").innerHTML = acts.length ? acts.map((x) => { const q = parse(actText(x.m), 2);

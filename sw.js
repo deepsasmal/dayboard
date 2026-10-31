@@ -1,6 +1,6 @@
 // Network first, cached copy when offline, so the app opens without a connection.
-const C = "dayboard-v1";
-addEventListener("install", (e) => { e.waitUntil(caches.open(C).then((c) => c.addAll(["./", "index.html", "newtab.css", "newtab.js", "shim.js"]))); skipWaiting(); });
+const C = "dayboard-v2";
+addEventListener("install", (e) => { e.waitUntil(caches.open(C).then((c) => c.addAll(["./", "index.html", "newtab.css", "newtab.js", "followups.js", "shim.js"]))); skipWaiting(); });
 addEventListener("activate", (e) => e.waitUntil(clients.claim()));
 addEventListener("fetch", (e) => {
   if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;

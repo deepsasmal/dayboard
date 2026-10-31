@@ -1087,3 +1087,4 @@ body.sky-rise .skyev{background:radial-gradient(130% 80% at 16% 108%,rgba(255,18
 body{font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 h1,h2,h3,.rsub,.hint{text-wrap:balance}p{text-wrap:pretty}
 button:focus-visible,a:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid rgba(232,168,92,.75);outline-offset:2px}
+.mtadd[hidden],.mtlist[hidden]{display:none}.mtlist .pill.soft{background:none;color:var(--ash)}

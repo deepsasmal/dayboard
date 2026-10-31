@@ -345,12 +345,17 @@
       <textarea id="mtText" spellcheck="false" placeholder="Take notes here…&#10;&#10;- [ ] Send the deck to Priya #client !1&#10;- [ ] Follow up on the release @Ravi"></textarea>
     </section>
     <aside class="mttasks" aria-label="Tasks">
+      <div class="mtsec" id="mtFoundH" hidden><h3>Follow-ups found <b id="mtFN" class="mono"></b></h3></div>
+      <input id="mtMe" class="mtadd" type="text" maxlength="40" placeholder="Which name is you? Lines about you stay yours." hidden aria-label="Your name">
+      <ul id="mtFound" class="mtlist" hidden></ul>
       <div class="mtsec"><h3>Action items <b id="mtN" class="mono"></b></h3>
         <span class="seg" id="mtDue" role="group" aria-label="Due"><button data-d="today" aria-pressed="true">Today</button><button data-d="tomorrow" aria-pressed="false">Tomorrow</button><button data-d="week" aria-pressed="false">Next week</button></span></div>
       <ul id="mtActs" class="mtlist"></ul>
       <input id="mtAdd" class="mtadd" type="text" maxlength="140" placeholder="Add an action…  @who #tag !1" autocomplete="off" aria-label="Add an action item">
       <div class="mtsec"><h3>Added from this meeting</h3></div>
       <ul id="mtMade" class="mtlist"></ul>
+      <div class="mtsec" id="mtOwedH" hidden><h3>Still waiting on <b id="mtON" class="mono"></b></h3></div>
+      <ul id="mtOwed" class="mtlist" hidden></ul>
       <div class="mtsec"><h3 id="mtOpenH">Open tasks</h3></div>
       <ul id="mtOpen" class="mtlist"></ul>
     </aside>
@@ -437,6 +442,7 @@
   <div class="rtext"><p class="rbig">Rest well.</p><p class="rsmall">It is all here tomorrow.</p></div>
   <p class="rwake">press any key to come back</p>
 </div>
+<script src="followups.js"></script>
 <script src="shim.js"></script>
 <script src="newtab.js"></script>
 </body>
