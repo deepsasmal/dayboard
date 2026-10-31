@@ -1,4 +1,6 @@
 const $ = (s) => document.querySelector(s);
+/* background tabs do no clock work; everything catches up the moment the tab is seen again */
+const live = (f) => () => { if (!document.hidden) f(); };
 const typingNow = () => /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || document.activeElement.isContentEditable; // the note page is a contenteditable
 const applyPaintHide = () => { const f = $("#paintFig"); if (!f) return; f.classList.toggle("off", !!prefs.paintHide); $("#paintBtn").tabIndex = prefs.paintHide ? -1 : 0; try { localStorage["dayboard:ph"] = prefs.paintHide ? "1" : ""; } catch {} };
 try { document.body.dataset.clock = localStorage["dayboard:cs"] || "solid"; document.documentElement.style.setProperty("--gt", localStorage["dayboard:gt"] || "1"); } catch {} // no flash of the wrong clock style or glass // no flash of the wrong clock style
@@ -303,7 +305,7 @@ function moonG(p, r, flip) { // a moon of radius r centred on 0,0; the terminato
 }
 let sunMarkup = null, iconKey = "";
 function renderMoonIcon(night, now) { // after sunset the moon takes the sun's place on the arc, riding it from its real moonrise to moonset
-  const icon = $("#sunIcon"); sunMarkup ??= icon.innerHTML;
+  const icon = $("#sunIcon"); sunMarkup ??= icon.innerHTML; if (skyHold) return; // mid-event: the icon is fading out
   const { f, p } = moonPhase(now), flip = place().lat < 0, ph = Math.round(p * 300) + (flip ? "f" : "");
   if (iconKey !== "b" + ph) { $("#moonBtn svg").innerHTML = `<g transform="translate(11 11)">${moonG(p, 8, flip)}</g>`; iconKey = "b" + ph; }
   if (!night) { if (icon.dataset.m) { icon.innerHTML = sunMarkup; delete icon.dataset.m; } return; }
@@ -331,7 +333,15 @@ $("#moonBtn").onclick = (e) => { e.stopPropagation(); moonToggle(); };
 $("#sun svg").onclick = () => { if ($("#sun").classList.contains("night")) moonToggle(); };
 document.addEventListener("click", (e) => { if (!$("#moonPop").hidden && !e.target.closest("#moonPop, #moonBtn, #sun svg")) moonToggle(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#moonPop").hidden) { moonToggle(false); $("#moonBtn").focus(); } });
-setInterval(() => { if (!$("#moonPop").hidden) drawMoon(); }, 6e4);
+setInterval(live(() => { if (!$("#moonPop").hidden) drawMoon(); }), 6e4);
+let skyWas = null, skyAt = 0, skyT = 0, skyHold = false;
+function skyEvent(kind) { // "set" | "rise": the sun slips away and the sky warms, once; the moon (or sun) then takes its place
+  if (still.matches) return;
+  const b = document.body, ic = $("#sunIcon"); b.classList.remove("sky-set", "sky-rise"); void b.offsetWidth; b.classList.add("sky-" + kind);
+  clearTimeout(skyT); skyT = setTimeout(() => b.classList.remove("sky-" + kind), 14500);
+  skyHold = true; ic.style.transition = "opacity 2.2s ease"; ic.style.opacity = 0;
+  setTimeout(() => { skyHold = false; renderSun(); ic.style.opacity = ""; setTimeout(() => (ic.style.transition = ""), 2400); }, 2300);
+}
 function renderSun() {
   const now = Date.now(), [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: place().tz }).format(now).split("-").map(Number);
   const [rise, set] = sunTimes(y, m - 1, d);
@@ -345,6 +355,7 @@ function renderSun() {
   $("#sunDone").setAttribute("stroke-dasharray", `${f ?? 0} 1`);
   $("#sunIcon").setAttribute("transform", `translate(${120 - 108 * Math.cos(Math.PI * pos)} ${68 - 56 * Math.sin(Math.PI * pos)})`);
   $("#sunIcon").style.color = f === null ? "" : sunColor(f);
+  const dayNow = f !== null; if (skyWas !== null && dayNow !== skyWas && now - skyAt < 18e4 && !document.hidden && !skyHold) skyEvent(dayNow ? "rise" : "set"); skyWas = dayNow; skyAt = now; // only a change seen live, never one slept through
   $("#sun").classList.toggle("night", f === null); renderLight(f, pos); renderMoonIcon(f === null, now);
   $("#sun").setAttribute("aria-label", `${place().name}: sunrise ${hhmm(rise)}, sunset ${hhmm(set)}. ${$("#sunLeft").textContent}.`);
 }
@@ -363,7 +374,7 @@ function tick() {
   const h12 = prefs.clock === "12", [, hh, mm, ap] = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: h12 ? "h12" : "h23" }).match(/(\d+):(\d+)\s?([AP]M)?/);
   $("#clock").innerHTML = `${h12 ? +hh : hh}<span>:</span>${mm}${ap ? `<small class="ampm">${ap}</small>` : ""}`;
 }
-tick(); setInterval(tick, 1e4);
+tick(); setInterval(live(tick), 1e4);
 
 /* ---------- generative art (offline fallback): layered ridgelines, palette follows the hour, seeded by the day ---------- */
 function artFallback() {
@@ -621,6 +632,25 @@ let wi = 0;
 let showSeq = 0, pin = null; // pin: a wallpaper the user picked; it stays until they ask for another
 try { pin = JSON.parse(localStorage["dayboard:pin"] || "null"); } catch {}
 const unpin = () => { pin = null; try { localStorage.removeItem("dayboard:pin"); } catch {} };
+/* a 6000px original decodes to ~100 MB; the screen can use far less, so the original is shrunk to ~1.8x the screen (cap 3600px) before it is shown */
+const FIT = () => Math.min(3600, Math.max(2560, Math.round(innerWidth * (devicePixelRatio || 1) * 1.8)));
+function fileSize(u8) { // width and height from a JPEG or PNG header, without decoding it
+  if (u8[0] === 0x89 && u8[1] === 0x50) return [(u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19], (u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]];
+  if (u8[0] !== 0xff || u8[1] !== 0xd8) return null;
+  for (let i = 2; i < u8.length - 9;) { if (u8[i] !== 0xff) { i++; continue; } const m = u8[i + 1]; if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [(u8[i + 7] << 8) | u8[i + 8], (u8[i + 5] << 8) | u8[i + 6]]; i += 2 + ((u8[i + 2] << 8) | u8[i + 3]); }
+  return null;
+}
+async function fitBlob(url) { // -> an object URL of the picture at a size worth decoding
+  const r = await fetch(url); if (!r.ok) throw r.status; const b = await r.blob(), dim = fileSize(new Uint8Array(await b.slice(0, 65536).arrayBuffer()));
+  let w = dim?.[0], h = dim?.[1];
+  if (!w) { const bm = await createImageBitmap(b); w = bm.width; h = bm.height; bm.close(); }
+  const k = Math.min(1, FIT() / w); if (k >= .95) return URL.createObjectURL(b);
+  const bm = await createImageBitmap(b, { resizeWidth: Math.round(w * k), resizeHeight: Math.round(h * k), resizeQuality: "high" }), cv = new OffscreenCanvas(bm.width, bm.height);
+  cv.getContext("2d").drawImage(bm, 0, 0); bm.close();
+  return URL.createObjectURL(await cv.convertToBlob({ type: "image/jpeg", quality: 0.92 }));
+}
+const dropBlob = (o) => { if (o.dataset.blob) URL.revokeObjectURL(o.dataset.blob); };
+let revealed = false;
 function show(i, first, tries = 0, item) {
   const seq = ++showSeq, P = pool(), [src, title, artist, date, credit, metId] = item || P[i % P.length]; // seq: only the latest request may land, so a slow earlier image cannot replace a newer one
   const url = urlOf(src); if (!url) { if (mineReady && item) unpin(); return; } // a picture of yours that is not loaded yet (or was removed)
@@ -635,14 +665,17 @@ function show(i, first, tries = 0, item) {
     art.querySelector("svg")?.remove();
     const old = [...art.querySelectorAll(".paint")];
     art.append(img);
-    img.offsetWidth; img.classList.add("in");
-    setTimeout(() => old.forEach((o) => o.remove()), 2500);
+    img.offsetWidth; img.classList.add("in"); if (!revealed) { revealed = true; img.classList.add("rev"); } // the first picture of a page eases out of a blur
+    img.addEventListener("transitionend", () => img.classList.add("settled"), { once: true }); // once faded in, no layer hint is kept
+    img.addEventListener("animationend", (e) => { if (e.animationName === "kb") img.classList.add("done"); }); // when the slow drift ends it stays where it stopped, as a still picture, not a running animation
+    setTimeout(() => old.forEach((o) => { dropBlob(o); o.remove(); }), 2500);
     $("#capT").textContent = title;
     $("#capA").textContent = credit || `${artist}, ${date}`;
     artNow = { src, title, artist, date, credit, id: metId }; markSeen(src); if (!$("#story").hidden) storyOpen(); if (!$("#wpPop").hidden) wpMark();
     const hi = url.replace("/web-large/", "/original/"); // the Met's web-large copy is only ~600px wide: show it at once, then swap in the original (3000px+) when it has loaded
     if (hi !== src) { // some Met originals are huge: ask for the size first, and keep the 600px copy if it is over ~14 MB
-      const swap = () => { const big = new Image(); big.onload = () => { if (img.isConnected) img.src = hi; }; big.src = hi; };
+      const plain = () => { const big = new Image(); big.onload = () => { if (img.isConnected) img.src = hi; }; big.src = hi; };
+      const swap = () => fitBlob(hi).then((u) => { if (seq !== showSeq || !img.isConnected) return URL.revokeObjectURL(u); dropBlob(img); img.dataset.blob = u; img.src = u; }).catch(plain);
       fetch(hi, { method: "HEAD" }).then((r) => { if (+r.headers.get("content-length") < 14e6) swap(); }).catch(swap);
     }
   };
@@ -1122,7 +1155,7 @@ function renderWind() {
 }
 $("#windNotes").onclick = () => toggleNotes(true);
 $("#windX").onclick = () => { try { localStorage["dayboard:wind"] = today(); } catch {} renderWind(); };
-setInterval(renderWind, 6e4);
+setInterval(live(renderWind), 6e4);
 $("#proj").onchange = (e) => (ui.addProj = e.target.value);
 $("#pri").onclick = () => { ui.pri = (ui.pri % 3) + 1; $("#pri").textContent = "P" + ui.pri; };
 
@@ -1362,7 +1395,7 @@ function renderNudge() {
 }
 $("#nudgeGo").onclick = exportBackup;
 $("#nudgeLater").onclick = () => { prefs.nudgeUntil = Date.now() + 7 * 864e5; save(); renderNudge(); };
-setInterval(renderNudge, 6e4);
+setInterval(live(renderNudge), 6e4);
 
 /* ---------- undo: every delete can be taken back for a few seconds ---------- */
 let undoT, undoFn = null;
@@ -1860,6 +1893,8 @@ const palCmds = () => [
   ["Calm mode", "calm quiet fade", "Z", () => setCalm(!isCalm())],
   ["Life in weeks", "time life weeks dots years lived remaining mortality", "W", () => setTimeout(() => openTime("life"), 60)],
   ["Year in dots", "time year days dots left progress", "", () => setTimeout(() => openTime("year"), 60)],
+  ["Sky: preview sunset", "sunset sky glow evening preview", "", () => setTimeout(() => skyEvent("set"), 120)],
+  ["Sky: preview sunrise", "sunrise sky glow morning preview", "", () => setTimeout(() => skyEvent("rise"), 120)],
   ["Moon phase", "moon phase lunar full new crescent night moonrise moonset", "", () => setTimeout(() => moonToggle(true), 60)],
   ["Weather", "weather temperature forecast rain sky", "", () => setTimeout(() => wxToggle(true), 60)],
   ["Temperature: switch °C / °F", "fahrenheit celsius units temperature degrees", "", () => { prefs.units = useF() ? "c" : "f"; save(); renderWx(); }],
@@ -2038,9 +2073,10 @@ function wxFrame(t) {
   wxRaf = requestAnimationFrame(wxFrame);
 }
 function wxStart() {
-  cancelAnimationFrame(wxRaf); wxRaf = 0; wxCv.width = innerWidth; wxCv.height = innerHeight; // resizing also clears the last frame
+  cancelAnimationFrame(wxRaf); wxRaf = 0;
   wxKind = prefs.wx === "off" || still.matches ? "clear" : wxPrev || (wxData ? wxKindOf(wxData.code, wxData.cloud) : "clear");
-  if (wxKind === "clear") return;
+  if (wxKind === "clear") { wxCv.width = wxCv.height = 0; return; } // no sky effect: no pixels held
+  wxCv.width = innerWidth; wxCv.height = innerHeight; // resizing also clears the last frame
   wxSeed(); wxNext = performance.now() + 4e3; wxRaf = requestAnimationFrame(wxFrame);
 }
 function wxShow(kind) { wxPrev = kind; if (prefs.wx === "off" && kind) { prefs.wx = "on"; save(); syncPrefsUI(); } wxStart(); }
@@ -2162,7 +2198,7 @@ function toggleFav(item) { // a favourite keeps the whole entry, so a nature pho
 }
 function wpToggle(on = wpEl.hidden) {
   wpEl.hidden = !on; $("#wp").setAttribute("aria-expanded", on);
-  if (!on) return;
+  if (!on) return void $("#wpGrid").replaceChildren(); // the thumbnails are decoded pictures: let them go
   toggleSettings(false); bkToggle(false); storyClose(); $("#wpMsg").textContent = ""; wpRender();
   if (prefs.art === "photos" && !photos.length) loadPhotos().then(() => { applyArt(); wpRender(); }).catch(() => {});
   setTimeout(() => $("#wpGrid .wpt.on")?.scrollIntoView({ block: "center" }), 50);
@@ -2439,7 +2475,7 @@ function setRingHot(i) { // light one ring (and its legend row), dim the others
   });
   el.addEventListener("pointerleave", () => setRingHot(-1));
 }
-renderRings(); setInterval(renderRings, 3e4);
+renderRings(); setInterval(live(renderRings), 3e4);
 $("#rings").onclick = () => openTime();
 
 /* ---------- the time view: every week of a long life as a dot, and the year as one dot per day ---------- */
@@ -2777,3 +2813,5 @@ function openBreath() {
 }
 $("#breathX").onclick = closeBreath;
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openBreath(); } });
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); renderRings(); renderWind(); renderNudge(); renderNextMtg(); } });

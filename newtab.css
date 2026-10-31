@@ -24,7 +24,7 @@ button,input,select{font:inherit;color:inherit}
 .light{position:fixed;inset:0;z-index:-1;pointer-events:none;transition:--tint 6s linear,--glow 6s linear,--gx 6s linear;
   background:radial-gradient(90% 70% at var(--gx) -10%,var(--glow),transparent 70%),var(--tint)}
 .paint{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.04);transition:opacity 2.4s ease;will-change:opacity}
-.paint.in{opacity:1;animation:kb 90s ease-in-out forwards}
+.paint.in{opacity:1;animation:kb 60s ease-in-out forwards}
 @keyframes kb{to{transform:scale(1.09) translate(calc(var(--dir)*-1%),-.6%)}}
 .cap{position:fixed;right:20px;bottom:16px;z-index:4;display:flex;align-items:center;gap:12px;text-align:right;color:var(--ash);max-width:min(360px,calc(100vw - 32px))}
 .rf{flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(12px);color:var(--ash);cursor:pointer;transition:all .3s var(--ease)}
@@ -1049,3 +1049,21 @@ body.zen .freecard{display:none!important}
 .side{padding:18px 20px 20px;border-radius:26px;background:rgba(22,22,22,calc(.6*var(--gt)));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
 .side>:first-child{margin-top:0}.side h2:first-of-type{margin-top:18px}
 @media(min-width:1100px){.shell{grid-template-columns:minmax(0,1fr) 316px}}
+
+/* ---- immersion: the first painting eases out of a blur; sunset and sunrise colour the sky once; focus mode becomes a lamp-lit room ---- */
+.paint.rev{animation:kb 60s ease-in-out forwards,unveil 1.7s var(--ease) backwards}
+@keyframes unveil{from{filter:blur(18px) brightness(.55)}}
+.light::after{content:"";position:absolute;inset:0;opacity:0;pointer-events:none;background:radial-gradient(120% 75% at var(--gx) 105%,var(--ev,rgba(255,130,84,.6)),transparent 64%)}
+body.sky-set .light::after{--ev:rgba(255,124,86,.62);animation:skyev 14s ease-in-out}
+body.sky-rise .light::after{--ev:rgba(255,190,146,.58);animation:skyev 14s ease-in-out}
+@keyframes skyev{0%,100%{opacity:0}32%,58%{opacity:1}}
+.room{position:fixed;inset:0;z-index:-1;pointer-events:none;visibility:hidden;opacity:0;transition:opacity 1.8s ease,visibility 0s 1.8s;
+  background:radial-gradient(ellipse 52% 44% at 50% 40%,rgba(255,196,128,.27),transparent 72%),radial-gradient(ellipse 120% 100% at 50% 50%,transparent 34%,rgba(0,0,0,.7) 100%)}
+body.zen .room{visibility:visible;opacity:1;transition:opacity 1.8s ease}
+.skyev{position:fixed;inset:0;z-index:-1;pointer-events:none;visibility:hidden;opacity:0} /* a layer only while the moment lasts */
+body.sky-set .skyev,body.sky-rise .skyev{visibility:visible;animation:skyev 14s ease-in-out}
+body.sky-set .skyev{background:radial-gradient(130% 80% at 84% 108%,rgba(255,118,78,.8),rgba(255,150,96,.34) 42%,transparent 70%)}
+body.sky-rise .skyev{background:radial-gradient(130% 80% at 16% 108%,rgba(255,186,140,.72),rgba(255,214,170,.3) 42%,transparent 70%)}
+@keyframes skyev{0%,100%{opacity:0}32%,58%{opacity:1}}
+.paint.settled{will-change:auto}
+.paint.in.done{animation:none;transform:scale(1.09) translate(calc(var(--dir)*-1%),-.6%)}
