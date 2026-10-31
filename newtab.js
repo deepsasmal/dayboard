@@ -10,7 +10,7 @@ const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice
 /* ---------- storage (chrome.storage, localStorage fallback for plain-file preview) ---------- */
 const store = {
   async get() {
-    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol"]);
+    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol", "archive", "inbox"]);
     return JSON.parse(localStorage.dayboard || "{}");
   },
   set(o) {
@@ -18,8 +18,8 @@ const store = {
     localStorage.dayboard = JSON.stringify({ ...JSON.parse(localStorage.dayboard || "{}"), ...o });
   },
 };
-let tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
-let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
+let archive = [], inbox = [], tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
+let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", chime: "on", heads: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
 const CITIES = [
   { name: "Hyderabad", lat: 17.385, lon: 78.4867, tz: "Asia/Kolkata" }, { name: "Bengaluru", lat: 12.9716, lon: 77.5946, tz: "Asia/Kolkata" },
   { name: "Mumbai", lat: 19.076, lon: 72.8777, tz: "Asia/Kolkata" }, { name: "Delhi", lat: 28.6139, lon: 77.209, tz: "Asia/Kolkata" },
@@ -32,7 +32,7 @@ const CITIES = [
 ];
 const place = () => CITIES.find((c) => c.name === prefs.city) || CITIES[0];
 const ui = { renaming: null, editing: null, addCol: null, when: "all", sview: "list", proj: null, addProj: null, tag: null, pri: 2, due: null, rem: null };
-const save = () => store.set({ tasks, projects, links, saved, active: ui.proj, sview: ui.sview, dockSeeded: true, prefs, paint, trash, snaps });
+const save = () => store.set({ tasks, projects, links, saved, active: ui.proj, sview: ui.sview, dockSeeded: true, prefs, paint, trash, snaps, archive });
 
 /* ---------- shortcuts: editable, linked to projects; project-less ones are pinned in the top bar ---------- */
 const SEED = [
@@ -1235,11 +1235,13 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ui.renam
 document.addEventListener("focusout", (e) => { if (e.target.id === "pren" && ui.renaming) { ui.renaming = null; setTimeout(render); } }); // click-away cancels
 
 store.get().then((s) => { tasks = s.tasks || []; projects = s.projects || projects;
-  paint = s.paint || {}; trash = s.trash || []; snaps = s.snaps || {};
+  paint = s.paint || {}; trash = s.trash || []; snaps = s.snaps || {}; archive = s.archive || []; inbox = s.inbox || []; bellDraw();
   prefs = { ...prefs, ...(s.prefs || {}) };
   if (!prefs.firstSeen) { prefs.firstSeen = Date.now(); s.dirty = true; }
   const t0 = today(); // nothing goes "overdue": unfinished tasks quietly move to today and remember where they came from
   tasks.forEach((t) => { if (!t.done && !t.wait && t.due && t.due < t0) { t.from = t.from || t.due; t.due = t0; s.dirty = true; } });
+  const old = tasks.filter((t) => t.done && t.doneAt && t.doneAt < Date.now() - 30 * 864e5); // finished more than 30 days ago: tuck away, never delete
+  if (old.length) { archive = [...old, ...archive].slice(0, 3000); tasks = tasks.filter((t) => !old.includes(t)); s.dirty = true; inboxAdd("tidy", `Tucked away ${old.length} finished task${old.length > 1 ? "s" : ""}`, "Done for over 30 days. Find them under Recover in Preferences."); }
   if (s.links) links = s.links;
   else { // first run: seed shortcuts and projects
     
@@ -1368,11 +1370,13 @@ function syncPrefsUI() {
   $("#prefCity").value = place().name; $("#prefGlass").value = Number.isFinite(prefs.glass) ? prefs.glass : 50; applyGlass();
   applyPaintHide();
   document.body.dataset.clock = prefs.clockStyle || "solid"; try { localStorage["dayboard:cs"] = prefs.clockStyle || "solid"; } catch {}
-  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"], ["prefRings", "rings"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
+  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"], ["prefRings", "rings"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
   $("#backupInfo").textContent = prefs.lastBackup ? `Last backup: ${ago(prefs.lastBackup)}.` : "No backup yet.";
 }
 $("#prefCity").onchange = (e) => { prefs.city = e.target.value; save(); renderSun(); syncPrefsUI(); wxFetch(); };
 $("#prefGolden").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.golden = b.dataset.v; save(); syncPrefsUI(); goldenKey = ""; renderSun(); };
+$("#prefChime").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.chime = b.dataset.v; save(); syncPrefsUI(); if (prefs.chime === "on") chime(); };
+$("#prefHeads").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.heads = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefClockStyle").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.clockStyle = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefRings").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.rings = b.dataset.v; save(); syncPrefsUI(); renderRings(); };
 $("#prefFresh").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.fresh = b.dataset.v; save(); syncPrefsUI(); if (prefs.fresh === "on") libFetch().catch(() => {}); };
@@ -1763,6 +1767,7 @@ function takeSnap() { // the state at the start of today is also the end of yest
 function renderRecover() {
   const items = trash.filter((x) => Date.now() - x.at < 30 * 864e5);
   $("#trashList").innerHTML = items.length ? items.slice(0, 20).map((x, i) => `<li><span>${x.kind === "note" ? "Note" : "Task"} · ${esc((x.item.title || "").slice(0, 34))}</span><button type="button" class="pill" data-tr="${i}">Restore</button></li>`).join("") : `<li class="rnone">Nothing deleted recently.</li>`;
+  $("#archList").innerHTML = archive.length ? archive.slice(0, 20).map((t, i) => `<li><span>${esc((t.title || "").slice(0, 34))}</span><button type="button" class="pill" data-ar="${i}">Reopen</button></li>`).join("") + (archive.length > 20 ? `<li class="rnone">${archive.length - 20} older</li>` : "") : `<li class="rnone">Nothing tucked away yet.</li>`;
   const days = Object.keys(snaps).sort().reverse();
   $("#snapList").innerHTML = days.length ? days.map((d) => `<li><span>Start of ${esc(dayLabel(d))} · ${snaps[d].saved.length} notes · ${snaps[d].tasks.length} tasks</span><button type="button" class="pill" data-snap="${d}">Restore missing</button></li>`).join("") : `<li class="rnone">The first snapshot is taken the next time you open a tab.</li>`;
 }
@@ -1771,6 +1776,11 @@ $("#trashList").onclick = (e) => {
   const live = trash.filter((x) => Date.now() - x.at < 30 * 864e5), x = live[+b.dataset.tr]; if (!x) return;
   if (x.kind === "note") saved.unshift(x.item); else { tasks.push(x.item); sync(x.item); }
   trash = trash.filter((y) => y !== trash.find((z) => z.at === x.at && z.item.id === x.item.id)); save(); showNote(); render(); renderRecover(); msg(`Restored “${(x.item.title || "").slice(0, 30)}”.`);
+};
+$("#archList").onclick = (e) => {
+  const b = e.target.closest("[data-ar]"); const t = b && archive[+b.dataset.ar]; if (!t) return;
+  archive = archive.filter((x) => x !== t); Object.assign(t, { done: false, doneAt: null, due: today(), status: "todo" }); tasks.push(t); sync(t);
+  save(); render(); renderRecover(); msg(`Reopened “${(t.title || "").slice(0, 30)}”.`);
 };
 $("#snapList").onclick = (e) => { // non-destructive: only brings back what is missing now
   const b = e.target.closest("[data-snap]"); if (!b) return; const s = snaps[b.dataset.snap]; if (!s) return; let n = 0;
@@ -1895,6 +1905,7 @@ const palCmds = () => [
   ["Year in dots", "time year days dots left progress", "", () => setTimeout(() => openTime("year"), 60)],
   ["Sky: preview sunset", "sunset sky glow evening preview", "", () => setTimeout(() => skyEvent("set"), 120)],
   ["Sky: preview sunrise", "sunrise sky glow morning preview", "", () => setTimeout(() => skyEvent("rise"), 120)],
+  ["Notifications", "notifications inbox bell alerts reminders heads-up", "", () => setTimeout(() => EXT && bellToggle(true), 60)],
   ["Moon phase", "moon phase lunar full new crescent night moonrise moonset", "", () => setTimeout(() => moonToggle(true), 60)],
   ["Weather", "weather temperature forecast rain sky", "", () => setTimeout(() => wxToggle(true), 60)],
   ["Temperature: switch °C / °F", "fahrenheit celsius units temperature degrees", "", () => { prefs.units = useF() ? "c" : "f"; save(); renderWx(); }],
@@ -2604,7 +2615,7 @@ function olUI() {
   $("#olOn").textContent = ol ? "Replace" : "Connect"; $("#olNow").hidden = $("#olOff").hidden = !ol;
   if (ol) olSay(mt.err ? `Last refresh failed: ${mt.err}` : mt.at ? `${mt.ev.length} events. Updated ${agoText(mt.at)}.` : "Connected. Reading your calendar…", !!mt.err); else olSay("");
 }
-function mtChanged() { olUI(); renderNextMtg(); if (!$("#cal").hidden) drawCal(); }
+function mtChanged() { olUI(); renderNextMtg(); mtSchedule(); if (!$("#cal").hidden) drawCal(); }
 async function mtRefresh(manual) {
   if (!ol?.url || mtBusy) return; mtBusy = true; $("#calRefresh").classList.add("busy"); if (manual) olSay("Refreshing…");
   try {
@@ -2616,7 +2627,7 @@ async function mtRefresh(manual) {
   } catch (e) { mt.err = e.msg || (e.name === "TimeoutError" ? "Outlook took too long to answer." : "Could not reach Outlook. Showing the last copy."); }
   finally { mtBusy = false; $("#calRefresh").classList.remove("busy"); mtChanged(); }
 }
-function mtBoot() { if (ol?.url && Date.now() - mt.at > 10 * 6e4) mtRefresh(false); renderNextMtg(); }
+function mtBoot() { if (ol?.url && Date.now() - mt.at > 10 * 6e4) mtRefresh(false); renderNextMtg(); mtSchedule(); }
 setInterval(() => { if (ol?.url) { if (Date.now() - mt.at > 15 * 6e4) mtRefresh(false); renderNextMtg(); } }, 3e4);
 $("#olOn").onclick = async () => {
   let u = $("#olUrl").value.trim().replace(/^webcal:/i, "https:").replace(/\/calendar\.html(\?.*)?$/i, "/calendar.ics"), url;
@@ -2816,3 +2827,59 @@ $("#breathX").onclick = closeBreath;
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openBreath(); } });
 
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); renderRings(); renderWind(); renderNudge(); renderNextMtg(); } });
+
+/* ---------- notifications: a bell with the last two weeks of nudges, meeting heads-ups and tidy-ups, and a soft chime ---------- */
+const EXT = !!globalThis.chrome?.runtime?.id;
+const KIND = { meeting: "Meeting", task: "Reminder", golden: "Light", tidy: "Tidy" };
+function inboxAdd(kind, title, body) { // page-made entries are silent; the background adds the ones that chime
+  if (!EXT) return; inbox.unshift({ id: crypto.randomUUID(), ts: Date.now(), kind, title, body, read: false }); store.set({ inbox: inbox.slice(0, 100) }); bellDraw();
+}
+let ac = null;
+function chime() { // two soft sine notes, a quiet fifth apart; if the browser has not allowed sound yet it simply stays silent
+  try {
+    ac ||= new AudioContext(); if (ac.state === "suspended") ac.resume();
+    const t0 = ac.currentTime + 0.02;
+    [[880, 0], [1318.5, 0.16]].forEach(([f, d]) => {
+      const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.05, t0 + d + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 1.3);
+      o.start(t0 + d); o.stop(t0 + d + 1.4);
+    });
+  } catch {}
+}
+function bellDraw() {
+  $("#bellWrap").hidden = !EXT; if (!EXT) return;
+  const n = inbox.filter((x) => !x.read).length, b = $("#bellN"); b.hidden = !n; b.textContent = n > 9 ? "9+" : n; $("#bellBtn").setAttribute("aria-label", n ? `Notifications, ${n} new` : "Notifications");
+  if (!$("#inboxPop").hidden) inboxDraw();
+}
+function inboxDraw() {
+  const week = inbox.filter((x) => Date.now() - x.ts < 7 * 864e5), c = {}; week.forEach((x) => (c[x.kind] = (c[x.kind] || 0) + 1));
+  const sum = Object.entries(c).map(([k, v]) => `${v} ${(KIND[k] || k).toLowerCase()}${v > 1 && k !== "tidy" && k !== "golden" ? "s" : ""}`).join(" · ");
+  $("#inboxPop").innerHTML = `<div class="ibhead"><h3>Notifications</h3>${inbox.length ? `<button type="button" class="linkbtn" id="ibClear">Clear</button>` : ""}</div>` + (inbox.length
+    ? `<p class="ibsum">${week.length} this week${sum ? ` · ${esc(sum)}` : ""}</p><ul class="iblist">${inbox.slice(0, 30).map((x) => `<li class="${x.unread ? "new" : ""}" data-k="${esc(x.kind)}"><div><b>${esc(x.title)}</b><span>${esc(x.body || "")}</span></div><small>${agoText(x.ts)}</small>${x.kind === "meeting" && /^https:/i.test(x.join || "") ? `<a class="pill" href="${esc(x.join)}">Join</a>` : ""}</li>`).join("")}</ul>`
+    : `<p class="ibnone">All quiet. Reminders, meeting heads-ups and tidy-ups will show up here.</p>`);
+}
+function bellToggle(on = $("#inboxPop").hidden) {
+  if (on) { inboxDraw(); inbox.forEach((x) => { x.unread = !x.read; }); inboxDraw(); if (inbox.some((x) => !x.read)) { inbox.forEach((x) => (x.read = true)); store.set({ inbox }); } $("#bellN").hidden = true; }
+  $("#inboxPop").hidden = !on; $("#bellBtn").setAttribute("aria-expanded", on);
+  if (!on) inbox.forEach((x) => delete x.unread);
+}
+$("#bellBtn").onclick = (e) => { e.stopPropagation(); bellToggle(); };
+$("#inboxPop").onclick = (e) => { if (e.target.id === "ibClear") { inbox = []; store.set({ inbox }); bellDraw(); } };
+document.addEventListener("click", (e) => { if (!$("#inboxPop").hidden && !e.target.closest("#inboxPop, #bellBtn")) bellToggle(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#inboxPop").hidden) { bellToggle(false); $("#bellBtn").focus(); } });
+if (EXT) chrome.storage.onChanged.addListener((ch, area) => { // the background wrote something: update the bell, and chime once for each new alert
+  if (area !== "local" || !ch.inbox) return;
+  const was = new Set(inbox.map((x) => x.id)); inbox = ch.inbox.newValue || [];
+  const fresh = inbox.filter((x) => x.ding && !was.has(x.id) && !x.read);
+  bellDraw(); if (fresh.length && prefs.chime !== "off") chime();
+});
+function mtSchedule() { // alarms for the next 48 h of meetings, 15 minutes ahead; also the windows other reminders wait out
+  if (!EXT || !ol?.url) return;
+  const now = Date.now(), LEAD = 15 * 6e4, ev = mt.ev.filter((e) => !e.ad && !e.free && !e.cancelled && e.e > now && e.s < now + 48 * 36e5).sort((a, b) => a.s - b.s);
+  const next = {}; for (const e of ev) if (e.s - LEAD > now) next[`m:${e.id}:${e.s}`] = { id: e.id, t: (e.t || "Meeting").slice(0, 80), s: e.s, j: /^https:/i.test(e.join || "") ? e.join : "" };
+  chrome.storage.local.set({ mnext: next, mwin: ev.map((e) => [e.s, e.e]) });
+  chrome.alarms.getAll().then((all) => {
+    all.forEach((a) => { if (a.name.startsWith("m:") && !next[a.name]) chrome.alarms.clear(a.name); });
+    Object.keys(next).forEach((n) => { if (!all.some((a) => a.name === n)) chrome.alarms.create(n, { when: next[n].s - LEAD }); });
+  });
+}

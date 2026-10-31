@@ -66,6 +66,8 @@
   <div class="prefrow"><span>Time rings on the main page</span><span class="seg" id="prefRings" role="group" aria-label="Time rings"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span>Fresh paintings each week</span><span class="seg" id="prefFresh" role="group" aria-label="Fresh paintings each week"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span>Open the day on the first morning tab</span><span class="seg" id="prefOpenDay" role="group" aria-label="Open the day on the first morning tab"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span>Meeting heads-up (15 min)</span><span class="seg" id="prefHeads" role="group" aria-label="Meeting heads-up"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span>Soft chime</span><span class="seg" id="prefChime" role="group" aria-label="Chime"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span>Golden-hour nudge</span><span class="seg" id="prefGolden" role="group" aria-label="Golden-hour nudge"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span>Weather on the background</span><span class="seg" id="prefWx" role="group" aria-label="Weather on the background"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <h2>Your data</h2>
@@ -94,6 +96,8 @@
   <h2>Recover</h2>
   <p class="hint">Deleted notes and tasks stay here for 30 days.</p>
   <ul id="trashList" class="rlist"></ul>
+  <p class="hint">Finished tasks move here after 30 days.</p>
+  <ul id="archList" class="rlist"></ul>
   <p class="hint">A snapshot is saved at the first open of each day. Restoring only brings back what is missing now.</p>
   <ul id="snapList" class="rlist"></ul>
   <h2>Your days</h2>
@@ -113,6 +117,10 @@
     <kbd>/</kbd>
     <ul id="results" class="results" role="listbox" hidden></ul>
   </form>
+  <div id="bellWrap" class="bellwrap" hidden>
+    <button type="button" id="bellBtn" class="rf" aria-expanded="false" aria-controls="inboxPop" aria-label="Notifications" title="Notifications"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4"/></svg><b id="bellN" class="bn" hidden></b></button>
+    <div id="inboxPop" class="moonpop inbox" hidden role="dialog" aria-label="Notifications"></div>
+  </div>
 </header>
 
 <main class="shell">
