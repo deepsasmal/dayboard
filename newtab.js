@@ -798,7 +798,8 @@ function render() {
 function parse(raw, p) {
   const tags = [...raw.matchAll(/#([\w-]+)/g)].map((m) => m[1].toLowerCase());
   const pm = raw.match(/!([123])\b/), wm = raw.match(/@([\w.-]+)/); // @Priya_Nair -> "Priya Nair"
-  return { title: raw.replace(/#[\w-]+|@[\w.-]+|!([123])\b/g, "").replace(/\s+/g, " ").trim(), p: pm ? +pm[1] : p, tags, wait: wm ? wm[1].replace(/_/g, " ") : null };
+  const em = raw.match(/~(\d+(?:\.\d+)?)\s?(hr|h|min|m)?(?![\w])/i); // "~30m", "~1.5h", "~45": how long it takes
+  return { title: raw.replace(/#[\w-]+|@[\w.-]+|!([123])\b|~\d+(?:\.\d+)?\s?(?:hr|h|min|m)?(?![\w])/gi, "").replace(/\s+/g, " ").trim(), p: pm ? +pm[1] : p, tags, wait: wm ? wm[1].replace(/_/g, " ") : null, est: em ? Math.max(5, Math.round(+em[1] * (/^h/i.test(em[2] || "") ? 60 : 1))) : null };
 }
 
 /* ---------- notes: every note saves as you write. The first words create it; there is no Save step. ---------- */
@@ -1066,14 +1067,14 @@ const PH = $("#title").placeholder;
 $("#title").onblur = () => { if (!$("#title").value) { ui.addCol = null; $("#title").placeholder = PH; } };
 $("#add").onsubmit = (e) => {
   e.preventDefault();
-  const { title, p, tags: tg, wait } = parse($("#title").value, ui.pri);
+  const { title, p, tags: tg, wait, est } = parse($("#title").value, ui.pri);
   const rem = ui.rem, err = $("#err"), col = ui.addCol;
   if (!title) { err.textContent = "Give the task a name."; err.hidden = false; return; }
   if (rem && rem <= Date.now()) { err.textContent = "Pick a time a little later."; err.hidden = false; return; }
   let who = wait;
   if (col === "waiting" && !who) { who = (prompt("Waiting on whom?") || "").trim(); if (!who) return; }
   err.hidden = true;
-  const t = { id: crypto.randomUUID(), title, p, proj: $("#proj").value, tags: tg, wait: who, due: ui.due || (who ? plus(today(), 2) : today()), rem, done: false, status: col === "doing" ? "doing" : "todo", ord: Date.now() };
+  const t = { id: crypto.randomUUID(), title, p, proj: $("#proj").value, tags: tg, wait: who, due: ui.due || (who ? plus(today(), 2) : today()), rem, done: false, status: col === "doing" ? "doing" : "todo", ord: Date.now(), est };
   tasks.push(t); sync(t); save();
   e.target.reset(); ui.addProj = t.proj; ui.due = ui.rem = null; ui.addCol = null; $("#title").placeholder = PH; whenUI();
   if (!passWhen(t)) ui.when = "all"; // never hide what you just added
@@ -1275,7 +1276,7 @@ function clean(d) {
     tasks: arr(d.tasks, (x) => okId(x.id) && str(x.title, 1)).map((x) => ({
       id: x.id, title: str(x.title, 160), p: [1, 2, 3].includes(+x.p) ? +x.p : 2, proj: str(x.proj, 24) || "Inbox",
       tags: Array.isArray(x.tags) ? x.tags.filter((g) => typeof g === "string").map((g) => g.slice(0, 24)).slice(0, 10) : [],
-      wait: str(x.wait, 30) || null, due: ymd(x.due), from: ymd(x.from), rem: num(x.rem), done: !!x.done, doneAt: num(x.doneAt),
+      wait: str(x.wait, 30) || null, est: num(x.est), due: ymd(x.due), from: ymd(x.from), rem: num(x.rem), done: !!x.done, doneAt: num(x.doneAt),
       focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), focusFor: ymd(x.focusFor),
     })),
     links: arr(d.links, (x) => okId(x.id) && /^https?:\/\//i.test(x.url) && str(x.name, 1)).map((x) => ({
@@ -1749,8 +1750,8 @@ const mtBtn = () => { $("#mtgBtn").classList.toggle("live", !!mtg); $("#mtgBtn")
 const actText = (m) => (m[2] || m[4]).replace(/^(?:todo|action|ai):\s*/i, ""); // "[ ] todo: x" -> "x"
 const mtLines = () => mtg.body.split("\n").map((l, i) => ({ i, m: l.match(ACT) })).filter((x) => x.m);
 function mtMake(raw) { // one task from "Send deck @Priya #client !1"
-  const { title, p, tags, wait } = parse(raw, 2); if (!title) return null;
-  const t = { id: crypto.randomUUID(), title, p, proj: mtg.proj, tags, wait, due: wait ? plus(today(), 2) : mtDueDate(), rem: null, done: false, mid: mtg.id };
+  const { title, p, tags, wait, est } = parse(raw, 2); if (!title) return null;
+  const t = { id: crypto.randomUUID(), title, p, proj: mtg.proj, tags, wait, est, due: wait ? plus(today(), 2) : mtDueDate(), rem: null, done: false, mid: mtg.id };
   tasks.push(t); return t;
 }
 function mtTaken(lineIdx) { // mark the line as taken so it can't be added twice
@@ -2590,16 +2591,58 @@ $("#olOn").onclick = async () => {
 $("#olNow").onclick = () => mtRefresh(true);
 $("#olOff").onclick = async () => { ol = null; mt = { ev: [], at: 0, err: "" }; try { localStorage.removeItem("dayboard:mtgs"); } catch {} await store.set({ ol: null }); mtChanged(); olSay("Removed. Delete the published link in Outlook too if you like."); };
 $("#calRefresh").onclick = () => mtRefresh(true);
-function renderNextMtg() {
-  const b = $("#nextMtg"); if (!ol?.url) return void (b.hidden = true);
-  const now = Date.now(), eod = new Date().setHours(23, 59, 59, 999);
-  const L = mt.ev.filter((e) => !e.ad && !e.free && e.e > now && e.s <= eod).sort((x, y) => x.s - y.s), cur = L.find((e) => e.s <= now), e = cur || L[0];
-  if (!e) return void (b.hidden = true);
-  const soon = !cur && e.s - now < 10 * 6e4;
-  b.textContent = cur ? `Now · ${e.t} · until ${hhmm(e.e)}` : e.s - now < 60 * 6e4 ? `${e.t} · in ${inText(e.s - now)}` : `Next · ${e.t} · ${hhmm(e.s)}`;
-  b.classList.toggle("soon", soon || !!cur); b.dataset.e = e.id; b.dataset.d = lday(e.s); b.hidden = false;
+/* the line under the greeting: the next meeting, or how long you are free before it. Free time offers one task that fits. */
+let nm = null, freeSkip = new Set();
+function nextState(now) {
+  const eod = new Date().setHours(23, 59, 59, 999), hr = new Date(now).getHours();
+  const L = mt.ev.filter((e) => !e.ad && !e.free && e.e > now && e.s <= eod).sort((x, y) => x.s - y.s), cur = L.find((e) => e.s <= now);
+  if (cur) return { k: "now", e: cur };
+  const e = L[0];
+  if (e) { const gap = e.s - now; return gap < 10 * 6e4 ? { k: "soon", e } : gap >= 30 * 6e4 && hr >= 8 && hr < 19 ? { k: "free", e, gap } : { k: "next", e }; }
+  return mt.at && hr >= 16 && hr < 21 ? { k: "clear", gap: eod - now } : null;
 }
-$("#nextMtg").onclick = (e) => openCal(e.currentTarget.dataset.d, e.currentTarget.dataset.e);
+function renderNextMtg() {
+  const b = $("#nextMtg"); if (!ol?.url) { nm = null; return void (b.hidden = true); }
+  const now = Date.now(); nm = nextState(now);
+  if (!nm) { b.hidden = true; if (!$("#freeCard").hidden) freeToggle(false); return; }
+  const { k, e } = nm, gap5 = nm.gap && Math.floor(nm.gap / 3e5) * 3e5;
+  b.textContent = k === "now" ? `Now · ${e.t} · until ${hhmm(e.e)}` : k === "soon" ? `${e.t} · in ${inText(e.s - now)}` : k === "free" ? `${durText({ s: 0, e: gap5 })} free · until ${e.t}, ${hhmm(e.s)}` : k === "clear" ? "Free for the rest of the day" : e.s - now < 60 * 6e4 ? `${e.t} · in ${inText(e.s - now)}` : `Next · ${e.t} · ${hhmm(e.s)}`;
+  b.classList.toggle("soon", k === "soon" || k === "now"); b.classList.toggle("free", k === "free" || k === "clear");
+  b.dataset.e = e?.id || ""; b.dataset.d = e ? lday(e.s) : ""; b.title = k === "free" || k === "clear" ? "A task that fits" : "Open your calendar"; b.hidden = false;
+  if (!$("#freeCard").hidden) drawFree();
+}
+const estOf = (t) => t.est || 30;
+function suggest(minutes) { // one open task: overdue first, then due today, then by priority; it should fit the gap when we know how long it takes
+  const td = today(), rank = (t) => (t.from || (t.due && t.due < td) ? 0 : t.due === td ? 1 : t.due ? 2 + (new Date(t.due) - new Date(td)) / 864e5 : 99);
+  const c = open().filter((t) => !t.wait && !freeSkip.has(t.id)).sort((x, y) => rank(x) - rank(y) || x.p - y.p || (y.status === "doing") - (x.status === "doing") || (x.ord || 0) - (y.ord || 0));
+  return c.find((t) => estOf(t) <= minutes) || null;
+}
+function drawFree() {
+  if (!nm || (nm.k !== "free" && nm.k !== "clear")) return;
+  const now = Date.now(), gap = Math.floor(nm.gap / 3e5) * 3e5, min = Math.round(gap / 6e4), t = suggest(min);
+  const meta = t ? [t.proj, t.from ? "overdue" : t.due === today() ? "due today" : t.due ? fmtDue(t.due) : "", t.est ? `~${t.est >= 60 && t.est % 60 === 0 ? t.est / 60 + "h" : t.est + "m"}` : ""].filter(Boolean).join(" · ") : "";
+  $("#freeCard").innerHTML = `<div class="frhead"><h3>${durText({ s: 0, e: gap })} free</h3><p>${nm.k === "free" ? `until ${esc(nm.e.t)} at ${hhmm(nm.e.s)}` : "for the rest of the day"}</p></div>`
+    + (t ? `<div class="frtask"><b>${esc(t.title)}</b><small>${esc(meta)}</small></div><div class="ractions"><button type="button" class="pill" data-fr="another">Another</button><button type="button" class="pill solid" data-fr="start" data-id="${t.id}">${t.status === "doing" ? "Carry on" : "Start this"}</button></div>`
+      : `<p class="frnone">${freeSkip.size ? "That is everything for now." : "Nothing is waiting. Enjoy the gap."}</p>${freeSkip.size ? `<div class="ractions"><button type="button" class="pill" data-fr="reset">Show again</button></div>` : ""}`);
+}
+function freeToggle(on = $("#freeCard").hidden) { if (on) drawFree(); $("#freeCard").hidden = !on; $("#nextMtg").setAttribute("aria-expanded", on); }
+$("#nextMtg").onclick = (e) => {
+  e.stopPropagation(); const d = e.currentTarget.dataset;
+  if (nm && (nm.k === "free" || nm.k === "clear")) return freeToggle();
+  openCal(d.d, d.e);
+};
+$("#freeCard").onclick = (e) => {
+  const b = e.target.closest("[data-fr]"); if (!b) return; e.stopPropagation();
+  if (b.dataset.fr === "another") { const t = suggest(Math.round(nm.gap / 6e4)); if (t) freeSkip.add(t.id); drawFree(); }
+  else if (b.dataset.fr === "reset") { freeSkip.clear(); drawFree(); }
+  else if (b.dataset.fr === "start") {
+    const t = tasks.find((x) => x.id === b.dataset.id); if (!t) return; const was = t.status;
+    t.status = "doing"; save(); render(); freeToggle(false);
+    undoable(`Started “${t.title.slice(0, 32)}”`, () => { t.status = was || "todo"; });
+  }
+};
+document.addEventListener("click", (e) => { if (!$("#freeCard").hidden && !e.target.closest("#freeCard, #nextMtg")) freeToggle(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#freeCard").hidden) { freeToggle(false); $("#nextMtg").focus(); } });
 
 /* ---------- calendar (month and week) with festivals, due tasks and meetings ---------- */
 let calY = 0, calM = 0, calSel = "", calEv = "", calMode = "month";

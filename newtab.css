@@ -1030,3 +1030,14 @@ body.zen .moonpop,body.zen .moonbtn{display:none!important}
 body.zen .wxpop{display:none!important}
 .wxbig svg{width:34px;height:34px}
 #date{display:flex;align-items:center}.wxchip{vertical-align:middle;line-height:1.5}
+
+/* ---- free time: the same line under the greeting, and a small card with one task that fits ---- */
+.nmwrap{position:relative}
+.nextmtg.free::before{background:#9fd3b5}.nextmtg.free{color:var(--bone)}
+.freecard{top:calc(100% + 6px);width:min(320px,calc(100vw - 32px));gap:12px}
+.frhead h3{font-size:19px;font-weight:400;letter-spacing:-.02em;color:#fff}.frhead p{font-size:13px;color:var(--ash);margin-top:2px}
+.frtask{display:grid;gap:3px;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid var(--line)}
+.frtask b{font-weight:500;color:#fff;font-size:15px;overflow-wrap:anywhere}.frtask small{font-size:12px;color:var(--slate)}
+.frnone{font-size:13px;color:var(--ash)}
+.freecard .ractions{display:flex;gap:8px;justify-content:flex-end}.freecard .pill.solid{margin-left:0}
+body.zen .freecard{display:none!important}

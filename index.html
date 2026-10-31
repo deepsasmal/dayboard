@@ -138,7 +138,7 @@
       <ol id="week" class="week" aria-label="This week"></ol>
     </div>
     <h1 id="greet"></h1>
-    <button type="button" id="nextMtg" class="nextmtg" hidden title="Open your calendar"></button>
+    <div class="nmwrap"><button type="button" id="nextMtg" class="nextmtg" hidden title="Open your calendar"></button><div id="freeCard" class="moonpop freecard" hidden role="dialog" aria-label="Free time"></div></div>
     <button type="button" id="intent" class="intent" hidden title="Your intention for today. Click to change it."></button>
     </div>
     <figure class="paintfig" id="paintFig">
@@ -167,7 +167,7 @@
   <section class="main" aria-label="Tasks">
     <form id="add" class="add">
       <label class="sr" for="title">New task</label>
-      <input id="title" type="text" placeholder="Add a task   —   try  Ship report #client !1" maxlength="160" required>
+      <input id="title" type="text" placeholder="Add a task   —   try  Ship report #client !1 ~30m" maxlength="160" required>
       <div class="opts">
         <button type="button" id="pri" class="pill" title="Priority">P2</button>
         <select id="proj" class="pill" aria-label="Project"></select>
