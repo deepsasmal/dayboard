@@ -2410,6 +2410,7 @@ $("#oIntent").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); 
 $("#oNew").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); oFinish(true); } };
 $("#openX").onclick = closeOpenDay;
 $("#openDayBtn").onclick = () => setTimeout(openDay, 60);
+$("#openBtn").onclick = () => setTimeout(openDay, 60);
 $("#intent").onclick = () => { openDay(); oShow(2); };
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "o" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen() && $("#openday").hidden) { e.preventDefault(); openDay(); } });
 // the first tab of a morning offers it once; a minute after load, never over something you are doing
