@@ -1403,14 +1403,18 @@ setInterval(live(renderNudge), 6e4);
 
 /* ---------- undo: every delete can be taken back for a few seconds ---------- */
 let undoT, undoFn = null;
+const undoStack = []; // the last few undoable actions; Ctrl+Z walks back through them
 function undoable(label, fn) {
+  undoStack.push({ label, fn }); if (undoStack.length > 20) undoStack.shift();
   undoFn = fn; $("#undoMsg").textContent = label; $("#undo").hidden = false;
   clearTimeout(undoT); undoT = setTimeout(() => { $("#undo").hidden = true; undoFn = null; }, 15000);
 }
-$("#undoBtn").onclick = () => {
-  const f = undoFn; undoFn = null; $("#undo").hidden = true; clearTimeout(undoT); if (!f) return;
-  f(); save(); showNote(); render();
-};
+function undoLast() {
+  const u = undoStack.pop(); if (!u) return false;
+  undoFn = null; $("#undo").hidden = true; clearTimeout(undoT); u.fn(); save(); showNote(); render(); msg(""); return true;
+}
+$("#undoBtn").onclick = undoLast;
+addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && !typingNow() && undoLast()) e.preventDefault(); });
 
 /* ---------- other tabs and the quick-capture window write to the same storage: pick their changes up ---------- */
 function externalUpdate(next) {
