@@ -1041,3 +1041,4 @@ body.zen .wxpop{display:none!important}
 .frnone{font-size:13px;color:var(--ash)}
 .freecard .ractions{display:flex;gap:8px;justify-content:flex-end}.freecard .pill.solid{margin-left:0}
 body.zen .freecard{display:none!important}
+.nmwrap{margin-top:14px}.nextmtg{margin:0 0 8px}
