@@ -809,6 +809,14 @@ function pinCard(id) { // dropping a card on "What matters today" pins it there 
   if (open().filter((x) => x.focus).length >= 3) return flash("Three is plenty for one day. Unpin one to make room.");
   t.focus = true; save(); render();
 }
+function startNow(id) { // a card dropped under the quote becomes the task you are doing now
+  const t = tasks.find((x) => x.id === id); if (!t) return; nowPick = id;
+  if (colOf(t) === "doing") return renderNow();
+  moveCard(id, "doing");
+}
+const nowZone = (e) => cardId && e.target.closest?.("#now, #nowDrop");
+document.addEventListener("dragover", (e) => { const z = nowZone(e); if (!z) return; e.preventDefault(); clearDrop(); z.classList.add("over"); });
+document.addEventListener("drop", (e) => { if (!nowZone(e)) return; e.preventDefault(); const id = cardId; clearDrop(); startNow(id); });
 document.addEventListener("dragover", (e) => { const f = cardId && e.target.closest?.(".hr .focus"); if (!f) return; e.preventDefault(); clearDrop(); f.classList.add("over"); });
 document.addEventListener("drop", (e) => { const f = cardId && e.target.closest?.(".hr .focus"); if (!f) return; e.preventDefault(); const id = cardId; clearDrop(); pinCard(id); });
 document.addEventListener("dragstart", (e) => { if (e.target.closest?.("[data-cid]")) document.body.classList.add("dragcard"); });
