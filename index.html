@@ -134,6 +134,7 @@
   <select id="switch" class="pill switch" aria-label="Project"></select>
   <nav id="links" class="links" aria-label="Pinned shortcuts"></nav>
   <button id="mtgBtn" class="pill ico" aria-label="Meeting" title="Meeting notes and tasks  (M)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
+  <button id="peopleBtn" class="pill ico" aria-label="People" title="People: who is doing what  (P)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M16 5.2a3.2 3.2 0 0 1 0 5.6M18 14.8c1.8.7 3 2.4 3 5.2"/></svg></button>
   <button id="notesBtn" class="pill ico" aria-label="Notes" aria-expanded="false" aria-controls="notesPanel" title="Notes  (N)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/></svg></button>
   <form id="search" class="search" autocomplete="off">
     <input id="q" type="text" placeholder="Search, jump, or run anything" aria-label="Search or jump" role="combobox" aria-expanded="false">
@@ -433,6 +434,12 @@
   </section>
 </div>
 <p id="lookCap" class="lookcap" aria-live="polite"></p>
+<div id="people" class="ritual peoplev" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="People">
+  <button type="button" id="peopleX" class="sortx" aria-label="Close">×</button>
+  <div class="pvhead"><h2 class="rtitle">People</h2><p class="rsub">Who is doing what. Drag a chip to another person or column; click one to move it along.</p>
+    <div class="pvbar"><input id="pSearch" type="search" placeholder="Search people or work, Enter to add someone" autocomplete="off" aria-label="Search people"><span id="pSug" class="pvsug"></span></div></div>
+  <div id="pBoard" class="pboard"></div>
+</div>
 <div id="timev" class="ritual timev" tabindex="-1" hidden role="dialog" aria-modal="true" aria-label="Time">
   <button type="button" id="timeX" class="sortx" aria-label="Close">×</button>
   <p class="sorthead">Time</p>

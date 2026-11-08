@@ -12,7 +12,7 @@ const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice
 const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x)); // key order differs after a round trip through Chrome
 const store = {
   async get() {
-    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol", "archive", "inbox", "care"]);
+    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol", "archive", "inbox", "care", "people"]);
     return JSON.parse(localStorage.dayboard || "{}");
   },
   mine: {}, // what this page itself wrote, by key (last few versions). Chrome echoes our own writes back as "changes", sometimes after we have already edited again; applying that echo would roll newer work back.
@@ -22,7 +22,7 @@ const store = {
     localStorage.dayboard = JSON.stringify({ ...JSON.parse(localStorage.dayboard || "{}"), ...o });
   },
 };
-let care = {}, archive = [], inbox = [], tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
+let people = [], care = {}, archive = [], inbox = [], tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
 let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", care: "on", chime: "on", heads: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
 const CITIES = [
   { name: "Hyderabad", lat: 17.385, lon: 78.4867, tz: "Asia/Kolkata" }, { name: "Bengaluru", lat: 12.9716, lon: 77.5946, tz: "Asia/Kolkata" },
@@ -36,7 +36,7 @@ const CITIES = [
 ];
 const place = () => CITIES.find((c) => c.name === prefs.city) || CITIES[0];
 const ui = { renaming: null, editing: null, addCol: null, when: "all", sview: "list", proj: null, addProj: null, tag: null, pri: 2, due: null, rem: null };
-const save = () => store.set({ tasks, projects, links, saved, active: ui.proj, sview: ui.sview, dockSeeded: true, prefs, paint, trash, snaps, archive });
+const save = () => store.set({ tasks, projects, links, saved, active: ui.proj, sview: ui.sview, dockSeeded: true, prefs, paint, trash, snaps, archive, people });
 
 /* ---------- shortcuts: editable, linked to projects; project-less ones are pinned in the top bar ---------- */
 const SEED = [
@@ -772,7 +772,7 @@ function moveCard(id, col, at) { // at = [cardId, after?] places it next to that
   if (colOf(t) !== col) {
     if (col === "waiting") {
       const who = (prompt("Waiting on whom?", t.wait || "") || "").trim(); if (!who) return;
-      t.wait = who; t.done = false; t.doneAt = null; if (!t.due || t.due < today()) t.due = plus(today(), 2); // follow-up date
+      t.wait = who; t.waitAt = Date.now(); t.done = false; t.doneAt = null; if (!t.due || t.due < today()) t.due = plus(today(), 2); // follow-up date
     } else {
       t.wait = null; t.done = col === "done"; t.doneAt = t.done ? Date.now() : null; t.status = col === "doing" ? "doing" : "todo";
     }
@@ -1291,7 +1291,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ui.renam
 document.addEventListener("focusout", (e) => { if (e.target.id === "pren" && ui.renaming) { ui.renaming = null; setTimeout(render); } }); // click-away cancels
 
 store.get().then((s) => { tasks = s.tasks || []; projects = s.projects || projects;
-  paint = s.paint || {}; trash = s.trash || []; snaps = s.snaps || {}; archive = s.archive || []; inbox = s.inbox || []; care = s.care || {}; bellDraw(); careDraw();
+  paint = s.paint || {}; trash = s.trash || []; snaps = s.snaps || {}; archive = s.archive || []; inbox = s.inbox || []; care = s.care || {}; people = s.people || []; bellDraw(); careDraw();
   prefs = { ...prefs, ...(s.prefs || {}) };
   if (!prefs.firstSeen) { prefs.firstSeen = Date.now(); s.dirty = true; }
   const t0 = today(); // nothing goes "overdue": unfinished tasks quietly move to today and remember where they came from
@@ -1377,7 +1377,7 @@ function clean(d) {
       id: x.id, title: str(x.title, 160), p: [1, 2, 3].includes(+x.p) ? +x.p : 2, proj: str(x.proj, 24) || "Inbox",
       tags: Array.isArray(x.tags) ? x.tags.filter((g) => typeof g === "string").map((g) => g.slice(0, 24)).slice(0, 10) : [],
       wait: str(x.wait, 30) || null, est: num(x.est), due: ymd(x.due), from: ymd(x.from), rem: num(x.rem), done: !!x.done, doneAt: num(x.doneAt),
-      focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", spent: num(x.spent), ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), focusFor: ymd(x.focusFor),
+      focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", spent: num(x.spent), ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), wst: x.wst === "doing" ? "doing" : null, waitAt: num(x.waitAt), focusFor: ymd(x.focusFor),
     })),
     links: arr(d.links, (x) => okId(x.id) && /^https?:\/\//i.test(x.url) && str(x.name, 1)).map((x) => ({
       id: x.id, name: str(x.name, 32), url: x.url.slice(0, 2000), proj: str(x.proj, 24) || null, dock: !!x.dock,
@@ -1837,7 +1837,7 @@ $("#wrapBtn").onclick = openWrap; $("#windWrap").onclick = openWrap; $("#wrapX")
 
 /* these overlays take the keyboard: the page's own shortcuts stay quiet, Esc steps out */
 addEventListener("keydown", (e) => {
-  const open = !$("#lb").hidden ? () => (document.fullscreenElement || lbBigOn() ? lbFullToggle() : closeLb()) : !$("#wrap").hidden ? closeWrap : !$("#days").hidden ? closeDays : !$("#mtgv").hidden ? closeMtg : !$("#openday").hidden ? closeOpenDay : !$("#breath").hidden ? closeBreath : !$("#timev").hidden ? closeTime : !$("#cal").hidden ? closeCal : null; if (!open) return;
+  const open = !$("#lb").hidden ? () => (document.fullscreenElement || lbBigOn() ? lbFullToggle() : closeLb()) : !$("#wrap").hidden ? closeWrap : !$("#days").hidden ? closeDays : !$("#mtgv").hidden ? closeMtg : !$("#openday").hidden ? closeOpenDay : !$("#breath").hidden ? closeBreath : !$("#people").hidden ? closePeople : !$("#timev").hidden ? closeTime : !$("#cal").hidden ? closeCal : null; if (!open) return;
   if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); return open(); }
   if (!/INPUT|TEXTAREA/.test(e.target.tagName)) e.stopPropagation();
 }, true);
@@ -1996,7 +1996,7 @@ $("#mtDiscard").onclick = () => {
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && $("#mtgv").hidden && $("#sort").hidden && $("#wrap").hidden && $("#lb").hidden) { e.preventDefault(); openMtg(); } });
 
 /* ---------- focus mode (F) ---------- */
-const zenOpen = () => ["#sort", "#wrap", "#days", "#lb", "#mtgv", "#openday", "#breath", "#timev", "#cal"].some((s) => !$(s).hidden) || document.body.classList.contains("looking");
+const zenOpen = () => ["#sort", "#wrap", "#days", "#lb", "#mtgv", "#openday", "#breath", "#timev", "#cal", "#people"].some((s) => !$(s).hidden) || document.body.classList.contains("looking");
 function setZen(on = !body.classList.contains("zen")) { body.classList.toggle("zen", on); scrollTo(0, 0); }
 $("#zenBtn").onclick = () => setZen(true); $("#zenRow").onclick = () => setTimeout(() => setZen(true), 60); $("#zenExit").onclick = () => setZen(false);
 addEventListener("keydown", (e) => {
@@ -2018,6 +2018,7 @@ const palCmds = () => [
   ["Sky: preview sunset", "sunset sky glow evening preview", "", () => setTimeout(() => skyEvent("set"), 120)],
   ["Sky: preview sunrise", "sunrise sky glow morning preview", "", () => setTimeout(() => skyEvent("rise"), 120)],
   ["Day timeline", "today hours schedule agenda timeline pointer now next", "", () => { cxMode = "day"; cxDraw(); $("#calBlock").scrollIntoView({ block: "center" }); }],
+  ["People: who is doing what", "people team assign delegate owner board workload", "P", () => setTimeout(openPeople, 60)],
   ["Notifications", "notifications inbox bell alerts reminders heads-up", "", () => setTimeout(() => EXT && bellToggle(true), 60)],
   ["Moon phase", "moon phase lunar full new crescent night moonrise moonset", "", () => setTimeout(() => moonToggle(true), 60)],
   ["Weather", "weather temperature forecast rain sky", "", () => setTimeout(() => wxToggle(true), 60)],
@@ -3141,3 +3142,68 @@ $("#carew").onclick = (e) => {
   care = { ...c }; store.set({ care }); careDraw(); b.blur?.();
 };
 setInterval(live(careDraw), 6e4);
+
+/* ---------- people: assign work to someone and see who is doing what (a swimlane per person) ---------- */
+const initials = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
+const hue = (n) => [...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+const first = (n) => (n || "").trim().split(/\s+/)[0].toLowerCase();
+const canonPerson = (name) => { const n = (name || "").trim(); if (!n) return ""; const hit = people.find((x) => x.name.toLowerCase() === n.toLowerCase()) || people.find((x) => first(x.name) === first(n) && n.split(/\s+/).length === 1) || [...new Set(tasks.map((t) => t.wait).filter(Boolean))].map((w) => ({ name: w })).find((x) => x.name.toLowerCase() === n.toLowerCase()); return hit ? hit.name : n; };
+function addPerson(name) { const n = canonPerson(name); if (!n || n === "Me") return n; if (!people.some((x) => x.name === n)) { people.push({ name: n }); save(); } return n; }
+let pq = "";
+const ST = [["todo", "To do"], ["doing", "Doing"], ["done", "Done"]];
+const stOf = (t) => (t.done ? "done" : (t.wait ? t.wst : t.status) === "doing" ? "doing" : "todo");
+function lanes() {
+  const names = new Set(people.map((x) => x.name)); tasks.forEach((t) => t.wait && (!t.done || Date.now() - (t.doneAt || 0) < 7 * 864e5) && names.add(t.wait));
+  return ["Me", ...[...names].filter((n) => n !== "Me").sort((a, b) => a.localeCompare(b))];
+}
+const chipsOf = (lane, st) => tasks.filter((t) => (lane === "Me" ? !t.wait : t.wait === lane) && stOf(t) === st && (st !== "done" || Date.now() - (t.doneAt || 0) < 7 * 864e5)).sort((a, b) => (a.p - b.p) || ((a.ord || 0) - (b.ord || 0)));
+const loadH = (lane) => tasks.filter((t) => !t.done && (lane === "Me" ? !t.wait : t.wait === lane)).reduce((a, t) => a + (t.est || 30), 0) / 60;
+function drawPeople() {
+  const q = pq.trim().toLowerCase(), all = lanes(), shown = all.filter((n) => !q || n.toLowerCase().includes(q) || tasks.some((t) => (n === "Me" ? !t.wait : t.wait === n) && t.title.toLowerCase().includes(q)));
+  const att = {}; mt.ev.forEach((e) => (e.att || []).forEach((a) => { if (a && a !== prefs.me) att[a] = (att[a] || 0) + 1; }));
+  const sug = Object.entries(att).sort((a, b) => b[1] - a[1]).map((x) => x[0]).filter((n) => !all.some((l) => first(l) === first(n))).slice(0, 6);
+  $("#pSug").innerHTML = sug.length && !q ? `<small>From your calendar</small>` + sug.map((n) => `<button type="button" class="pvadd" data-padd="${esc(n)}">+ ${esc(n)}</button>`).join("") : "";
+  const ago = (t) => { const d = Math.floor((Date.now() - (t.waitAt || 0)) / 864e5); return t.waitAt && !t.done && d >= 1 ? `${d}d` : ""; };
+  const chip = (t, lane) => `<div class="pchip p${t.p}${t.done ? " dn" : ""}${!t.done && t.waitAt && Date.now() - t.waitAt > 4 * 864e5 ? " old" : ""}" draggable="true" data-tid="${t.id}" title="Click to move it along. Drag to give it to someone else."><i></i><span>${esc(t.title)}</span>${t.est ? `<small>${t.est}m</small>` : ""}${ago(t) ? `<small class="ag">${ago(t)}</small>` : ""}${lane !== "Me" && !t.done ? `<button type="button" class="pcx" data-pback="${t.id}" aria-label="Take it back" title="Take it back">↩</button>` : ""}</div>`;
+  const max = Math.max(8, ...all.map(loadH));
+  $("#pBoard").innerHTML = `<div class="plane phd"><span></span>${ST.map(([, n]) => `<b>${n}</b>`).join("")}</div>` + (shown.length ? shown.map((lane) => {
+    const h = loadH(lane), me = lane === "Me", open = tasks.filter((t) => !t.done && (me ? !t.wait : t.wait === lane)).length;
+    return `<div class="plane" data-lane="${esc(lane)}"><div class="pwho"><span class="pav${me ? " me" : ""}" style="--h:${hue(lane)}">${me ? "Me" : esc(initials(lane))}</span><div><b>${esc(me ? "Me" : lane)}</b><small>${open ? `${open} open · ${h.toFixed(1)}h` : "Nothing open"}</small><span class="pload"><i style="width:${Math.min(100, (h / max) * 100)}%"${h > 8 ? ' class="hi"' : ""}></i></span></div></div>`
+      + ST.map(([st]) => `<div class="pcell" data-lane="${esc(lane)}" data-st="${st}">${chipsOf(lane, st).map((t) => chip(t, lane)).join("")}${st === "todo" ? `<input class="lanein" data-lane="${esc(lane)}" placeholder="${me ? "Add for yourself…" : "Assign to " + esc(first(lane)) + "…"}" maxlength="140" autocomplete="off" aria-label="Assign a task to ${esc(lane)}">` : ""}</div>`).join("") + "</div>";
+  }).join("") : `<p class="pnone">Nobody matches${pq.trim() ? ` “${esc(pq.trim())}”. Press Enter to add them.` : "."}</p>`);
+}
+function openPeople() {
+  ["#menu", "#wpPop", "#bkPop", "#story", "#settings"].forEach((x) => { $(x).hidden = true; });
+  $("#people").hidden = false; document.body.classList.add("sorting"); pq = ""; $("#pSearch").value = ""; drawPeople(); $("#pSearch").focus();
+}
+function closePeople() { $("#people").hidden = true; document.body.classList.remove("sorting"); document.activeElement?.blur?.(); render(); }
+$("#peopleBtn").onclick = openPeople; $("#peopleX").onclick = closePeople;
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "p" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openPeople(); } });
+$("#pSearch").oninput = (e) => { pq = e.target.value; drawPeople(); };
+$("#pSearch").onkeydown = (e) => { e.stopPropagation(); if (e.key === "Escape") { if (pq) { e.preventDefault(); e.stopPropagation(); e.target.value = pq = ""; drawPeople(); } return; }
+  if (e.key === "Enter" && pq.trim()) { e.preventDefault(); const hit = lanes().find((n) => n.toLowerCase() === pq.trim().toLowerCase()); if (!hit) { addPerson(pq.trim()); pq = ""; e.target.value = ""; drawPeople(); } else { document.querySelector(`.lanein[data-lane="${CSS.escape(hit)}"]`)?.focus(); } } };
+$("#pSug").onclick = (e) => { const b = e.target.closest("[data-padd]"); if (b) { addPerson(b.dataset.padd); drawPeople(); } };
+function assign(t, lane, st) { // give a task to someone (or back to me) and set where it stands
+  const wasCol = colOf(t), to = lane === "Me" ? null : canonPerson(lane);
+  if (to && to !== t.wait) { t.waitAt = Date.now(); t.wst = null; if (!t.due || t.due < today()) t.due = plus(today(), 2); }
+  t.wait = to; if (to) addPerson(to);
+  if (st === "done") { if (!t.done) { t.done = true; t.doneAt = Date.now(); } } else { t.done = false; t.doneAt = null; }
+  if (to) { t.wst = st === "doing" ? "doing" : null; t.status = "todo"; } else { t.status = st === "doing" ? "doing" : "todo"; t.wst = null; }
+  track(t, wasCol); sync(t); save();
+}
+let pDrag = null;
+$("#pBoard").addEventListener("dragstart", (e) => { const c = e.target.closest("[data-tid]"); if (!c) return; pDrag = c.dataset.tid; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", pDrag); c.classList.add("dragging"); });
+$("#pBoard").addEventListener("dragend", () => { pDrag = null; document.querySelectorAll("#pBoard .over,#pBoard .dragging").forEach((n) => n.classList.remove("over", "dragging")); });
+$("#pBoard").addEventListener("dragover", (e) => { const c = pDrag && e.target.closest(".pcell"); if (!c) return; e.preventDefault(); document.querySelectorAll("#pBoard .over").forEach((n) => n !== c && n.classList.remove("over")); c.classList.add("over"); });
+$("#pBoard").addEventListener("drop", (e) => { const c = pDrag && e.target.closest(".pcell"), t = c && tasks.find((x) => x.id === pDrag); if (!t) return; e.preventDefault(); assign(t, c.dataset.lane, c.dataset.st); drawPeople(); });
+$("#pBoard").addEventListener("click", (e) => {
+  const back = e.target.closest("[data-pback]"); if (back) { const t = tasks.find((x) => x.id === back.dataset.pback); if (t) { assign(t, "Me", stOf(t)); drawPeople(); } return; }
+  const c = e.target.closest("[data-tid]"), t = c && tasks.find((x) => x.id === c.dataset.tid); if (!t) return;
+  const lane = t.wait || "Me", next = { todo: "doing", doing: "done", done: "todo" }[stOf(t)]; assign(t, lane, next); drawPeople();
+});
+$("#pBoard").addEventListener("keydown", (e) => {
+  e.stopPropagation(); const i = e.target.closest(".lanein"); if (!i || e.key !== "Enter") return; e.preventDefault();
+  const q = parse(i.value.trim(), 2); if (!q.title) return; const lane = i.dataset.lane, who = lane === "Me" ? null : canonPerson(lane);
+  const t = { id: crypto.randomUUID(), title: q.title, p: q.p, proj: ui.proj || ui.addProj || projects[0], tags: q.tags, wait: who, waitAt: who ? Date.now() : undefined, est: q.est, due: who ? plus(today(), 2) : today(), rem: null, done: false, status: "todo", ord: Date.now() };
+  tasks.push(t); if (who) addPerson(who); sync(t); save(); drawPeople(); document.querySelector(`.lanein[data-lane="${CSS.escape(lane)}"]`)?.focus();
+});

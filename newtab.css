@@ -1320,3 +1320,31 @@ body.zen .rings{display:none!important}
   .cap:hover .capbtn,.cap:focus-within .capbtn{max-width:330px;opacity:1;margin-right:10px}
 }
 .tp{grid-template-columns:44px 1fr 36px 68px;gap:10px}
+
+/* people: a swimlane per person */
+.peoplev{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:14px;padding:40px 24px 28px}
+.pvhead{width:min(1180px,100%);display:grid;gap:6px}.pvhead .rtitle{margin:0}.pvhead .rsub{max-width:70ch}
+.pvbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:8px}
+#pSearch{flex:0 1 380px;background:var(--glass);border:1px solid var(--line);border-radius:9999px;padding:9px 16px;font-size:14px;color:#fff;outline:0}#pSearch:focus{border-color:rgba(255,255,255,.4)}
+.pvsug{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.pvsug small{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-right:4px}
+.pvadd{background:none;border:1px dashed rgba(255,255,255,.28);color:var(--ash);font:inherit;font-size:12px;padding:3px 11px;border-radius:9999px;cursor:pointer;transition:all .2s}.pvadd:hover{color:#fff;border-color:#fff}
+.pboard{width:min(1180px,100%);display:grid;gap:10px;align-content:start}
+.plane{display:grid;grid-template-columns:230px repeat(3,minmax(0,1fr));gap:10px;align-items:stretch}
+.phd{padding:0 4px}.phd b{font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.plane>.pwho,.plane>.pcell{border-radius:18px;background:rgba(22,22,22,calc(.55*var(--gt)));border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.pwho{display:flex;gap:12px;align-items:center;padding:12px 14px}.pwho>div{display:grid;gap:2px;min-width:0;flex:1}.pwho b{font-weight:500;font-size:14px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pwho small{font-size:11.5px;color:var(--slate)}
+.pav{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:500;color:#fff;background:hsl(var(--h) 32% 36%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}.pav.me{background:var(--accent);color:#1a1205}
+.pload{display:block;height:4px;border-radius:4px;background:rgba(255,255,255,.1);margin-top:4px;overflow:hidden}.pload i{display:block;height:100%;border-radius:4px;background:rgba(255,255,255,.7);transition:width .6s var(--ease)}.pload i.hi{background:var(--accent)}
+.pcell{display:flex;flex-direction:column;gap:6px;padding:10px;min-height:64px;transition:background .2s,border-color .2s}.pcell.over{border-color:var(--accent);background:rgba(232,168,92,.1)!important}
+.pchip{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;background:rgba(255,255,255,.1);font-size:13px;color:#fff;cursor:grab;transition:background .2s,transform .2s var(--ease),opacity .2s}
+.pchip:hover{background:rgba(255,255,255,.18)}.pchip:active{cursor:grabbing}.pchip.dragging{opacity:.4}
+.pchip i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--slate)}.pchip.p1 i{background:var(--accent)}
+.pchip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pchip small{font-size:11px;color:var(--ash);font-variant-numeric:tabular-nums}.pchip small.ag{color:var(--slate)}
+.pchip.old{box-shadow:inset 0 0 0 1px rgba(232,168,92,.55)}.pchip.old small.ag{color:var(--accent)}
+.pchip.dn{opacity:.55}.pchip.dn span{text-decoration:line-through}
+.pcx{background:none;border:0;color:var(--slate);font-size:13px;padding:0 2px;cursor:pointer;opacity:0;transition:opacity .2s}.pchip:hover .pcx{opacity:1}.pcx:hover{color:#fff}
+.lanein{background:none;border:0;border-top:1px dashed var(--line);padding:6px 2px 0;font-size:12.5px;color:var(--bone);outline:0;margin-top:auto}.lanein::placeholder{color:var(--slate)}.lanein:focus{border-top-color:rgba(255,255,255,.4)}
+.pnone{color:var(--slate);font-size:14px;padding:18px 4px}
+@media(max-width:900px){.plane{grid-template-columns:1fr}.phd{display:none}}
+body.zen #peopleBtn{display:none}
+.pvhead .rtitle,.pvhead .rsub{text-align:left;justify-self:start}.pvhead .rsub{width:100%;max-width:70ch}.pvhead .rtitle{font-size:clamp(28px,3vw,40px)}
