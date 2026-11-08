@@ -782,6 +782,11 @@ document.addEventListener("drop", (e) => {
   e.preventDefault(); const c = e.target.closest("[data-cid]");
   moveCard(cardId, col.dataset.col, c && c.dataset.cid !== cardId && col.dataset.col !== "done" ? [c.dataset.cid, below(e, c)] : null);
 });
+$("#focus").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-unpin]"), t = b && tasks.find((x) => x.id === b.dataset.unpin); if (!t) return;
+  const was = { focus: t.focus, focusFor: t.focusFor }; t.focus = false; if (t.focusFor === today()) t.focusFor = null; save(); render();
+  undoable(`Removed “${t.title.slice(0, 32)}” from today`, () => Object.assign(t, was));
+});
 function pinCard(id) { // dropping a card on "What matters today" pins it there as well; it stays on the board
   const t = tasks.find((x) => x.id === id); if (!t || t.done) return;
   if (t.focus) return flash("Already on today's list.");
@@ -838,7 +843,7 @@ function render() {
   renderLinks();
 
   const fl = open().filter((t) => t.focus || t.focusFor === today());
-  $("#focus").innerHTML = fl.length ? fl.map((t) => `<li><button class="check" data-done="${t.id}" aria-label="Complete"></button><span>${esc(t.title)}</span>${t.wait ? `<small>${esc(t.wait)}</small>` : t.focusFor === today() && !t.focus ? `<small>your one thing</small>` : ""}</li>`).join("")
+  $("#focus").innerHTML = fl.length ? fl.map((t) => `<li><button class="check" data-done="${t.id}" aria-label="Complete"></button><span>${esc(t.title)}</span>${t.wait ? `<small>${esc(t.wait)}</small>` : t.focusFor === today() && !t.focus ? `<small>your one thing</small>` : ""}<button type="button" class="fx2" data-unpin="${t.id}" aria-label="Remove from today's list" title="Remove from today's list">×</button></li>`).join("")
     : `<li class="fe">Star up to three tasks and they will live here.</li>`;
   renderNow(); renderBoard(); renderWind(); renderNudge(); renderNoteList(); reconcilePaint(); renderPaint();
   $("#sOpen").textContent = open().length;
