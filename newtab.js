@@ -869,6 +869,7 @@ function render() {
   const fl = open().filter((t) => t.focus || t.focusFor === today());
   $("#focus").innerHTML = fl.length ? fl.map((t) => `<li><button class="check" data-done="${t.id}" aria-label="Complete"></button><span>${esc(t.title)}</span>${t.wait ? `<small>${esc(t.wait)}</small>` : t.focusFor === today() && !t.focus ? `<small>your one thing</small>` : ""}<button type="button" class="fx2" data-unpin="${t.id}" aria-label="Remove from today's list" title="Remove from today's list">×</button></li>`).join("")
     : `<li class="fe">Star up to three tasks and they will live here.</li>`;
+  if (!$("#people").hidden) drawPeople();
   renderNow(); renderBoard(); renderWind(); renderNudge(); renderNoteList(); reconcilePaint(); renderPaint();
   $("#sOpen").textContent = open().length;
   $("#sDue").textContent = open().filter((t) => t.due === today() && !t.wait).length;
@@ -1377,7 +1378,7 @@ function clean(d) {
       id: x.id, title: str(x.title, 160), p: [1, 2, 3].includes(+x.p) ? +x.p : 2, proj: str(x.proj, 24) || "Inbox",
       tags: Array.isArray(x.tags) ? x.tags.filter((g) => typeof g === "string").map((g) => g.slice(0, 24)).slice(0, 10) : [],
       wait: str(x.wait, 30) || null, est: num(x.est), due: ymd(x.due), from: ymd(x.from), rem: num(x.rem), done: !!x.done, doneAt: num(x.doneAt),
-      focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", spent: num(x.spent), ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), wst: x.wst === "doing" ? "doing" : null, waitAt: num(x.waitAt), focusFor: ymd(x.focusFor),
+      focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", spent: num(x.spent), ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), wst: x.wst === "doing" ? "doing" : null, pord: num(x.pord) ?? undefined, waitAt: num(x.waitAt), focusFor: ymd(x.focusFor),
     })),
     links: arr(d.links, (x) => okId(x.id) && /^https?:\/\//i.test(x.url) && str(x.name, 1)).map((x) => ({
       id: x.id, name: str(x.name, 32), url: x.url.slice(0, 2000), proj: str(x.proj, 24) || null, dock: !!x.dock,
@@ -3156,7 +3157,7 @@ function lanes() {
   const names = new Set(people.map((x) => x.name)); tasks.forEach((t) => t.wait && (!t.done || Date.now() - (t.doneAt || 0) < 7 * 864e5) && names.add(t.wait));
   return ["Me", ...[...names].filter((n) => n !== "Me").sort((a, b) => a.localeCompare(b))];
 }
-const chipsOf = (lane, st) => tasks.filter((t) => (lane === "Me" ? !t.wait : t.wait === lane) && stOf(t) === st && (st !== "done" || Date.now() - (t.doneAt || 0) < 7 * 864e5)).sort((a, b) => (a.p - b.p) || ((a.ord || 0) - (b.ord || 0)));
+const chipsOf = (lane, st) => tasks.filter((t) => (lane === "Me" ? !t.wait : t.wait === lane) && stOf(t) === st && (st !== "done" || Date.now() - (t.doneAt || 0) < 7 * 864e5)).sort((a, b) => (a.pord != null && b.pord != null ? a.pord - b.pord : a.pord != null ? -1 : b.pord != null ? 1 : (a.p - b.p) || ((a.ord || 0) - (b.ord || 0))));
 const loadH = (lane) => tasks.filter((t) => !t.done && (lane === "Me" ? !t.wait : t.wait === lane)).reduce((a, t) => a + (t.est || 30), 0) / 60;
 function drawPeople() {
   const q = pq.trim().toLowerCase(), all = lanes(), shown = all.filter((n) => !q || n.toLowerCase().includes(q) || tasks.some((t) => (n === "Me" ? !t.wait : t.wait === n) && t.title.toLowerCase().includes(q)));
@@ -3164,7 +3165,7 @@ function drawPeople() {
   const sug = Object.entries(att).sort((a, b) => b[1] - a[1]).map((x) => x[0]).filter((n) => !all.some((l) => first(l) === first(n))).slice(0, 6);
   $("#pSug").innerHTML = sug.length && !q ? `<small>From your calendar</small>` + sug.map((n) => `<button type="button" class="pvadd" data-padd="${esc(n)}">+ ${esc(n)}</button>`).join("") : "";
   const ago = (t) => { const d = Math.floor((Date.now() - (t.waitAt || 0)) / 864e5); return t.waitAt && !t.done && d >= 1 ? `${d}d` : ""; };
-  const chip = (t, lane) => `<div class="pchip p${t.p}${t.done ? " dn" : ""}${!t.done && t.waitAt && Date.now() - t.waitAt > 4 * 864e5 ? " old" : ""}" draggable="true" data-tid="${t.id}" title="Click to move it along. Drag to give it to someone else."><i></i><span>${esc(t.title)}</span>${t.est ? `<small>${t.est}m</small>` : ""}${ago(t) ? `<small class="ag">${ago(t)}</small>` : ""}${lane !== "Me" && !t.done ? `<button type="button" class="pcx" data-pback="${t.id}" aria-label="Take it back" title="Take it back">↩</button>` : ""}</div>`;
+  const chip = (t, lane) => `<div class="pchip p${t.p}${t.done ? " dn" : ""}${!t.done && t.waitAt && Date.now() - t.waitAt > 4 * 864e5 ? " old" : ""}" draggable="true" data-tid="${t.id}" title="Click to move it along. Drag to give it to someone else."><i></i><span>${esc(t.title)}</span>${t.est ? `<small>${t.est}m</small>` : ""}${ago(t) ? `<small class="ag">${ago(t)}</small>` : ""}<span class="pacts">${lane !== "Me" && !t.done ? `<button type="button" class="pcx" data-pback="${t.id}" aria-label="Take it back" title="Take it back">↩</button>` : ""}<button type="button" class="pcx" data-pdel="${t.id}" aria-label="Remove" title="Remove  (Undo is offered)">×</button></span></div>`;
   const max = Math.max(8, ...all.map(loadH));
   $("#pBoard").innerHTML = `<div class="plane phd"><span></span>${ST.map(([, n]) => `<b>${n}</b>`).join("")}</div>` + (shown.length ? shown.map((lane) => {
     const h = loadH(lane), me = lane === "Me", open = tasks.filter((t) => !t.done && (me ? !t.wait : t.wait === lane)).length;
@@ -3193,10 +3194,22 @@ function assign(t, lane, st) { // give a task to someone (or back to me) and set
 }
 let pDrag = null;
 $("#pBoard").addEventListener("dragstart", (e) => { const c = e.target.closest("[data-tid]"); if (!c) return; pDrag = c.dataset.tid; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", pDrag); c.classList.add("dragging"); });
-$("#pBoard").addEventListener("dragend", () => { pDrag = null; document.querySelectorAll("#pBoard .over,#pBoard .dragging").forEach((n) => n.classList.remove("over", "dragging")); });
-$("#pBoard").addEventListener("dragover", (e) => { const c = pDrag && e.target.closest(".pcell"); if (!c) return; e.preventDefault(); document.querySelectorAll("#pBoard .over").forEach((n) => n !== c && n.classList.remove("over")); c.classList.add("over"); });
-$("#pBoard").addEventListener("drop", (e) => { const c = pDrag && e.target.closest(".pcell"), t = c && tasks.find((x) => x.id === pDrag); if (!t) return; e.preventDefault(); assign(t, c.dataset.lane, c.dataset.st); drawPeople(); });
+const pClear = () => document.querySelectorAll("#pBoard .over,#pBoard .dragging,#pBoard .pbefore,#pBoard .pafter").forEach((n) => n.classList.remove("over", "dragging", "pbefore", "pafter"));
+const pBelow = (e, c) => { const r = c.getBoundingClientRect(); return e.clientY > r.top + r.height / 2; };
+$("#pBoard").addEventListener("dragend", () => { pDrag = null; pClear(); });
+$("#pBoard").addEventListener("dragover", (e) => {
+  const c = pDrag && e.target.closest(".pcell"); if (!c) return; e.preventDefault(); pClear(); c.classList.add("over");
+  const ch = e.target.closest(".pchip"); if (ch && ch.dataset.tid !== pDrag) ch.classList.add(pBelow(e, ch) ? "pafter" : "pbefore");
+});
+$("#pBoard").addEventListener("drop", (e) => {
+  const c = pDrag && e.target.closest(".pcell"), t = c && tasks.find((x) => x.id === pDrag); if (!t) return; e.preventDefault();
+  const ch = e.target.closest(".pchip"), tgt = ch && ch.dataset.tid !== t.id ? ch.dataset.tid : null, after = ch ? pBelow(e, ch) : true;
+  if (c.dataset.lane !== (t.wait || "Me") || c.dataset.st !== stOf(t)) assign(t, c.dataset.lane, c.dataset.st);
+  const cell = chipsOf(c.dataset.lane, c.dataset.st).filter((x) => x !== t), at = tgt ? cell.findIndex((x) => x.id === tgt) + (after ? 1 : 0) : cell.length;
+  cell.splice(Math.max(0, at), 0, t); cell.forEach((x, i) => (x.pord = (i + 1) * 1000)); save(); pClear(); pDrag = null; drawPeople();
+});
 $("#pBoard").addEventListener("click", (e) => {
+  const del = e.target.closest("[data-pdel]"); if (del) { const t = tasks.find((x) => x.id === del.dataset.pdel); if (t) { const i = tasks.indexOf(t); tasks = tasks.filter((x) => x !== t); sync({ ...t, done: true }); save(); toTrash("task", t); drawPeople(); undoable(`Removed “${t.title.slice(0, 32)}”`, () => { tasks.splice(Math.min(i, tasks.length), 0, t); sync(t); trash = trash.filter((x) => x.item !== t); }); } return; }
   const back = e.target.closest("[data-pback]"); if (back) { const t = tasks.find((x) => x.id === back.dataset.pback); if (t) { assign(t, "Me", stOf(t)); drawPeople(); } return; }
   const c = e.target.closest("[data-tid]"), t = c && tasks.find((x) => x.id === c.dataset.tid); if (!t) return;
   const lane = t.wait || "Me", next = { todo: "doing", doing: "done", done: "todo" }[stOf(t)]; assign(t, lane, next); drawPeople();
