@@ -23,7 +23,7 @@ const store = {
   },
 };
 let people = [], care = {}, archive = [], inbox = [], tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
-let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", care: "on", chime: "on", heads: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
+let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", pet: "cat", care: "on", chime: "on", heads: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
 const CITIES = [
   { name: "Hyderabad", lat: 17.385, lon: 78.4867, tz: "Asia/Kolkata" }, { name: "Bengaluru", lat: 12.9716, lon: 77.5946, tz: "Asia/Kolkata" },
   { name: "Mumbai", lat: 19.076, lon: 72.8777, tz: "Asia/Kolkata" }, { name: "Delhi", lat: 28.6139, lon: 77.209, tz: "Asia/Kolkata" },
@@ -764,6 +764,7 @@ function renderBoard() {
 }
 function track(t, was) { // time on a task runs while it sits in Doing and is not paused
   const is = colOf(t), now = Date.now();
+  if (is === "done" && was !== "done") dispatchEvent(new Event("pet:cheer"));
   if (was !== "doing" && is === "doing") { t.runAt = now; t.startedAt = now; }
   else if (was === "doing" && is !== "doing" && t.runAt) { t.spent = (t.spent || 0) + now - t.runAt; t.runAt = null; }
 }
@@ -1432,20 +1433,20 @@ const glassK = (v) => (v <= 50 ? 1 + (50 - v) / 50 * .6 : 1 - (v - 50) / 50 * .7
 /* widgets: each can be switched off; the choice is a list of names on <body> that the stylesheet hides */
 const WIDGETS = [
   ["week", "Week strip", "The days of this week, with the Day, Week, Month, Year picker."], ["sun", "Sun and moon arc", "Sunrise, sunset and the moon's phase."],
-  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""], ["carew", "Water, stretch and breath", "Quiet ticks and a one-minute breath."],
+  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""], ["pet", "Pixel pet", "A little pet that walks along the bottom of the page."], ["carew", "Water, stretch and breath", "Quiet ticks and a one-minute breath."],
   ["dayw", "Day timeline", "Today by the hour, with a pointer for now and your meetings."], ["rings", "Time rings", "Day, week, month and year progress."],
   ["wind", "Winding down", "The evening note with Wrap up the day."], ["focus", "What matters today", "Up to three pinned tasks."],
   ["nextmtg", "Next meeting line", "Under the greeting. Needs a calendar."], ["wx", "Weather chip", "The temperature beside the date."],
   ["dock", "Quick navigation strip", "Below the task board."], ["side", "Side panel", "Counts and projects."], ["bell", "Notification bell", ""],
 ];
-const wgOn = (k) => (k === "rings" ? prefs.rings !== "off" : k === "dayw" ? prefs.dayw !== "off" : k === "paint" ? !prefs.paintHide : !(prefs.hide || []).includes(k));
+const wgOn = (k) => (k === "pet" ? prefs.pet !== "off" : k === "rings" ? prefs.rings !== "off" : k === "dayw" ? prefs.dayw !== "off" : k === "paint" ? !prefs.paintHide : !(prefs.hide || []).includes(k));
 function applyHide() { const v = (prefs.hide || []).join(" "); document.body.dataset.hide = v; try { localStorage["dayboard:hide"] = v; } catch {} }
 function wgDraw() {
   $("#wgList").innerHTML = WIDGETS.filter(([k]) => (k === "nextmtg" ? HAS_OL : k === "bell" ? EXT : true)).map(([k, n, d]) => `<div class="prefrow"><span class="pl">${n}${d ? `<em>${d}</em>` : ""}</span><span class="seg" data-w="${k}" role="group" aria-label="${n}"><button data-v="on" aria-pressed="${wgOn(k)}">On</button><button data-v="off" aria-pressed="${!wgOn(k)}">Off</button></span></div>`).join("");
 }
 $("#wgList").onclick = (e) => {
   const b = e.target.closest("[data-v]"), k = b?.parentNode.dataset.w; if (!k) return; const on = b.dataset.v === "on";
-  if (k === "rings") { prefs.rings = on ? "on" : "off"; renderRings(); } else if (k === "dayw") { prefs.dayw = on ? "on" : "off"; renderDayW(); }
+  if (k === "pet") { prefs.pet = on ? prefs.petLast || "cat" : "off"; petApply(); } else if (k === "rings") { prefs.rings = on ? "on" : "off"; renderRings(); } else if (k === "dayw") { prefs.dayw = on ? "on" : "off"; renderDayW(); }
   else if (k === "paint") { prefs.paintHide = !on; applyPaintHide(); }
   else { const h = new Set(prefs.hide || []); on ? h.delete(k) : h.add(k); prefs.hide = [...h]; applyHide(); }
   save(); wgDraw();
@@ -1454,17 +1455,18 @@ function applyGlass() { const k = glassK(Number.isFinite(prefs.glass) ? prefs.gl
 $("#prefGlass").oninput = (e) => { prefs.glass = +e.target.value; applyGlass(); };
 $("#prefGlass").onchange = () => save();
 function syncPrefsUI() {
-  applyHide(); wgDraw();
+  applyHide(); wgDraw(); petApply();
   $("#prefCity").value = place().name; $("#prefGlass").value = Number.isFinite(prefs.glass) ? prefs.glass : 50; applyGlass();
   applyPaintHide();
   document.body.dataset.clock = prefs.clockStyle || "solid"; try { localStorage["dayboard:cs"] = prefs.clockStyle || "solid"; } catch {}
-  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefCare", "care"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
+  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefPet", "pet"], ["prefCare", "care"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
   $("#backupInfo").textContent = prefs.lastBackup ? `Last backup: ${ago(prefs.lastBackup)}.` : "No backup yet.";
 }
 $("#prefCity").onchange = (e) => { prefs.city = e.target.value; save(); renderSun(); syncPrefsUI(); wxFetch(); };
 $("#prefGolden").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.golden = b.dataset.v; save(); syncPrefsUI(); goldenKey = ""; renderSun(); };
 $("#prefChime").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.chime = b.dataset.v; save(); syncPrefsUI(); if (prefs.chime === "on") chime(); };
 $("#prefCare").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.care = b.dataset.v; save(); syncPrefsUI(); };
+$("#prefPet").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.pet = b.dataset.v; if (b.dataset.v !== "off") prefs.petLast = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefHeads").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.heads = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefClockStyle").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.clockStyle = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefFresh").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.fresh = b.dataset.v; save(); syncPrefsUI(); if (prefs.fresh === "on") libFetch().catch(() => {}); };
@@ -3262,3 +3264,55 @@ document.addEventListener("focusout", (e) => { if (e.target === mnIn) setTimeout
 const peopleList = document.createElement("datalist"); peopleList.id = "peopleList"; document.body.append(peopleList);
 const refreshPeopleList = () => (peopleList.innerHTML = peopleHere().map((x) => `<option value="${esc(x.n)}">`).join(""));
 document.addEventListener("focusin", (e) => { if (e.target.id === "ceWait") refreshPeopleList(); });
+
+/* ---------- a pixel pet that walks along the bottom of the page (drawn in code, no images) ---------- */
+const PET_FR = {
+  walkA: ["..........O..O..", "..........OOOOO.", "..........OKOKO.", "..........OOPOO.", "O....OOOOOOOOO..", "OO..OOOOOOOOOO..", ".OOOOOOOOOOOOO..", "..OOWWWWWWOOO...", "..OOOOOOOOOOO...", "..OO.OO..OO.OO..", "..DD.DD..DD.DD..", "................"],
+  walkB: ["..........O..O..", "..........OOOOO.", "..........OKOKO.", "..........OOPOO.", "O....OOOOOOOOO..", "OO..OOOOOOOOOO..", ".OOOOOOOOOOOOO..", "..OOWWWWWWOOO...", "..OOOOOOOOOOO...", "...OO.OO.OO.OO..", "...DD.DD.DD.DD..", "................"],
+  sit: ["..........O..O..", "..........OOOOO.", "..........OKOKO.", "..........OOPOO.", "..........OOOOO.", "........OOOOOOO.", ".......OOOWWWOOO", "O.....OOOWWWWOO.", "OO...OOOOOWWOOO.", ".OOOOOOOOOOOOOO.", "..DDDDDDDDDDDD..", "................"],
+  sleep: ["................", "................", "................", "................", "................", "....OOOOOOOO....", "..OOOOOOOOOOOO..", ".OOOOOOOOOOOKKO.", "OOOOOOOWWWOOOOO.", ".OOOOOOOOOOOOOO.", "..DDDDDDDDDDDD..", "................"],
+};
+const PET_PAL = { cat: { O: "#e8a85c", D: "#b9772f", W: "#f7e6c6", K: "#241a10", P: "#f08a9a" }, dog: { O: "#c98f5c", D: "#8a5a32", W: "#f1e2cb", K: "#241a10", P: "#3a2a22" } };
+const PET_DOG_HEAD = { 0: "..........DOOOD..", 1: "..........DOOOOD." }; // floppy ears instead of pointed ones
+const PET_HEART = ["R.R", "RRR", ".R."], PET_ZZ = ["ZZZ", "..Z", ".Z.", "ZZZ"];
+const petEl = document.createElement("canvas"); petEl.id = "pet"; petEl.className = "pet"; petEl.width = 16; petEl.height = 16; petEl.setAttribute("aria-hidden", "true"); document.body.append(petEl);
+const petX = petEl.getContext("2d"), petImgs = {};
+function petFrames(kind) {
+  if (petImgs[kind]) return petImgs[kind]; const pal = PET_PAL[kind], out = {};
+  for (const [name, rows0] of Object.entries(PET_FR)) {
+    const rows = kind === "dog" && name !== "sleep" ? rows0.map((r, i) => (PET_DOG_HEAD[i] ? PET_DOG_HEAD[i].slice(0, 16) : r)) : rows0, c = document.createElement("canvas"); c.width = 16; c.height = 12; const x = c.getContext("2d");
+    rows.forEach((r, y) => [...r].forEach((ch, i) => { if (pal[ch]) { x.fillStyle = pal[ch]; x.fillRect(i, y, 1, 1); } })); out[name] = c;
+  }
+  return (petImgs[kind] = out);
+}
+let petI = 0, pet = { x: 80, dir: 1, mode: "walk", left: 40, f: 0, hop: 0, fx: "", fxT: 0 };
+function petPaint() {
+  const fr = petFrames(prefs.pet), name = pet.mode === "walk" ? (pet.f % 2 ? "walkB" : "walkA") : pet.mode === "sleep" ? "sleep" : "sit";
+  petX.clearRect(0, 0, 16, 16); petX.drawImage(fr[name], 0, 4);
+  const px = (rows, ox, oy, col) => rows.forEach((r, y) => [...r].forEach((ch, i) => { if (ch !== ".") { petX.fillStyle = col; petX.fillRect(ox + i, oy + y, 1, 1); } }));
+  if (pet.fx === "heart") px(PET_HEART, 11, 0, "#ff7b8f"); else if (pet.mode === "sleep" && pet.f % 8 < 5) px(PET_ZZ, 11, 1, "rgba(255,255,255,.85)");
+  petEl.style.transform = `translate(${Math.round(pet.x)}px,${-Math.round(pet.hop)}px) scaleX(${pet.dir})`;
+  petEl.style.transformOrigin = "center";
+}
+function petPick() { // what to do next
+  const h = new Date().getHours(), night = h >= 23 || h < 6, r = Math.random();
+  if (night || document.body.classList.contains("calm")) { pet.mode = "sleep"; pet.left = 40; return; }
+  if (r < 0.55) { pet.mode = "walk"; pet.left = 25 + Math.random() * 70; if (Math.random() < 0.4) pet.dir *= -1; } else { pet.mode = "sit"; pet.left = 20 + Math.random() * 45; }
+}
+function petTick() {
+  const W = innerWidth, still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (pet.fxT > 0 && --pet.fxT === 0) pet.fx = "";
+  if (pet.hopT > 0) { pet.hopT--; pet.hop = [0, 10, 16, 18, 16, 10, 0][6 - Math.max(0, Math.min(6, pet.hopT))] || 0; } else pet.hop = 0;
+  if (--pet.left <= 0 && !pet.fx) petPick();
+  if (pet.mode === "walk" && !still) { pet.x += pet.dir * 4; pet.f++; if (pet.x > W - 70) { pet.x = W - 70; pet.dir = -1; } if (pet.x < 6) { pet.x = 6; pet.dir = 1; } } else pet.f++;
+  petPaint();
+}
+function petApply() {
+  const on = prefs.pet && prefs.pet !== "off"; petEl.hidden = !on; clearInterval(petI); petI = 0; if (!on) return;
+  pet.x = Math.min(pet.x, innerWidth - 70); petPick(); petPaint(); petI = setInterval(live(petTick), 120);
+}
+function petJoy(hop) { if (petEl.hidden) return; pet.fx = "heart"; pet.fxT = 14; pet.mode = "sit"; pet.left = 16; if (hop) pet.hopT = 6; petPaint(); }
+addEventListener("pet:cheer", () => petJoy(true));
+addEventListener("pointermove", (e) => { // pointing at the pet makes it happy
+  if (petEl.hidden || pet.fx) return; const r = petEl.getBoundingClientRect(); if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top + 12 && e.clientY < r.bottom) petJoy(false);
+}, { passive: true });
