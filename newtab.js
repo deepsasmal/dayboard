@@ -715,7 +715,7 @@ function card(t, ci) {
         <select id="ceProj" class="pill" aria-label="Project">${projects.map((p) => `<option ${t.proj === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>
       <label class="cl">Due<input id="ceDue" type="date" value="${t.due || ""}"></label>
       <label class="cl">Remind<input id="ceRem" type="datetime-local" value="${t.rem ? local(t.rem) : ""}"></label>
-      <label class="cl">Waiting on<input id="ceWait" type="text" value="${esc(t.wait || "")}" maxlength="30" placeholder="Nobody"></label>
+      <label class="cl">Waiting on<input id="ceWait" list="peopleList" type="text" value="${esc(t.wait || "")}" maxlength="30" placeholder="Nobody"></label>
       <label class="cl">Tags<input id="ceTags" type="text" value="${esc(t.tags.join(" "))}" maxlength="60" placeholder="client work"></label>
       <div class="opts"><button type="button" class="pill" id="ceCancel">Cancel</button><button class="pill solid" type="submit">Save</button></div></form></li>`;
   }
@@ -880,9 +880,9 @@ function render() {
 /* "Ship it #client !1" -> title, tags, priority */
 function parse(raw, p) {
   const tags = [...raw.matchAll(/#([\w-]+)/g)].map((m) => m[1].toLowerCase());
-  const pm = raw.match(/!([123])\b/), wm = raw.match(/@([\w.-]+)/); // @Priya_Nair -> "Priya Nair"
+  const pm = raw.match(/!([123])\b/), wm = raw.match(/@([\p{L}\p{N}_.'’-]+)/u); // @Priya_Nair -> "Priya Nair"
   const em = raw.match(/~(\d+(?:\.\d+)?)\s?(hr|h|min|m)?(?![\w])/i); // "~30m", "~1.5h", "~45": how long it takes
-  return { title: raw.replace(/#[\w-]+|@[\w.-]+|!([123])\b|~\d+(?:\.\d+)?\s?(?:hr|h|min|m)?(?![\w])/gi, "").replace(/\s+/g, " ").trim(), p: pm ? +pm[1] : p, tags, wait: wm ? wm[1].replace(/_/g, " ") : null, est: em ? Math.max(5, Math.round(+em[1] * (/^h/i.test(em[2] || "") ? 60 : 1))) : null };
+  return { title: raw.replace(/#[\w-]+|@[\p{L}\p{N}_.'’-]+|!([123])\b|~\d+(?:\.\d+)?\s?(?:hr|h|min|m)?(?![\w])/giu, "").replace(/\s+/g, " ").trim(), p: pm ? +pm[1] : p, tags, wait: wm ? wm[1].replace(/_/g, " ") : null, est: em ? Math.max(5, Math.round(+em[1] * (/^h/i.test(em[2] || "") ? 60 : 1))) : null };
 }
 
 /* ---------- notes: every note saves as you write. The first words create it; there is no Save step. ---------- */
@@ -3203,7 +3203,49 @@ $("#pBoard").addEventListener("click", (e) => {
 });
 $("#pBoard").addEventListener("keydown", (e) => {
   e.stopPropagation(); const i = e.target.closest(".lanein"); if (!i || e.key !== "Enter") return; e.preventDefault();
-  const q = parse(i.value.trim(), 2); if (!q.title) return; const lane = i.dataset.lane, who = lane === "Me" ? null : canonPerson(lane);
+  const q = parse(i.value.trim(), 2); if (!q.title) return; const lane = i.dataset.lane, who = q.wait ? canonPerson(q.wait) : lane === "Me" ? null : canonPerson(lane);
   const t = { id: crypto.randomUUID(), title: q.title, p: q.p, proj: ui.proj || ui.addProj || projects[0], tags: q.tags, wait: who, waitAt: who ? Date.now() : undefined, est: q.est, due: who ? plus(today(), 2) : today(), rem: null, done: false, status: "todo", ord: Date.now() };
   tasks.push(t); if (who) addPerson(who); sync(t); save(); drawPeople(); document.querySelector(`.lanein[data-lane="${CSS.escape(lane)}"]`)?.focus();
 });
+
+/* ---------- @ mentions: type @ in any task field and pick someone, like Teams ---------- */
+const MENTION = "#title, #mtAdd, #nowPark, .lanein, #ceTitle, #wrapNew";
+function peopleHere() { // everyone Dayboard knows: your people, whoever has your tasks, and the people in your meetings
+  const m = new Map(), add = (n, src) => { n = (n || "").trim(); if (n && n !== "Me" && !m.has(n.toLowerCase())) m.set(n.toLowerCase(), { n, src }); };
+  people.forEach((x) => add(x.name, "People")); tasks.forEach((t) => add(t.wait, "People"));
+  mt.ev.forEach((e) => { add(e.org, "Calendar"); (e.att || []).forEach((a) => a !== prefs.me && add(a, "Calendar")); });
+  return [...m.values()];
+}
+const mnEl = document.createElement("ul"); mnEl.id = "mention"; mnEl.className = "mention"; mnEl.hidden = true; mnEl.setAttribute("role", "listbox"); document.body.append(mnEl);
+let mnIn = null, mnAt = -1, mnList = [], mnSel = 0;
+const mnClose = () => { mnEl.hidden = true; mnIn = null; };
+function mnOpen(inp) {
+  const pos = inp.selectionStart, before = inp.value.slice(0, pos), m = before.match(/(^|\s)@([\p{L}\p{N}_.'’-]*)$/u);
+  if (!m) return mnClose(); const q = m[2].replace(/_/g, " ").toLowerCase(); mnAt = pos - m[2].length - 1;
+  const score = (x) => { const n = x.n.toLowerCase(), w = n.split(/\s+/); return !q ? 3 : n.startsWith(q) ? 0 : w.some((t) => t.startsWith(q)) ? 1 : n.includes(q) ? 2 : 9; };
+  mnList = peopleHere().map((x) => ({ ...x, k: score(x) })).filter((x) => x.k < 9).sort((a, b) => a.k - b.k || a.n.localeCompare(b.n)).slice(0, 7);
+  if (!mnList.length) { if (q.length > 1) { mnList = [{ n: m[2].replace(/_/g, " "), src: "Add as new", k: 5 }]; } else return mnClose(); }
+  mnIn = inp; mnSel = 0; mnDraw();
+  const r = inp.getBoundingClientRect(), cv = (mnOpen.cv ||= document.createElement("canvas").getContext("2d")), cs = getComputedStyle(inp); cv.font = `${cs.fontSize} ${cs.fontFamily}`;
+  const x = r.left + parseFloat(cs.paddingLeft) + cv.measureText(inp.value.slice(0, mnAt)).width - inp.scrollLeft;
+  mnEl.hidden = false; const w = mnEl.offsetWidth, h = mnEl.offsetHeight, below = r.bottom + 6 + h < innerHeight;
+  mnEl.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + "px"; mnEl.style.top = (below ? r.bottom + 6 : r.top - h - 6) + "px";
+}
+function mnDraw() { mnEl.innerHTML = mnList.map((x, i) => `<li role="option" class="${i === mnSel ? "on" : ""}" data-i="${i}"><span class="pav" style="--h:${hue(x.n)}">${esc(initials(x.n))}</span><b>${esc(x.n)}</b><small>${esc(x.src)}</small></li>`).join(""); }
+function mnPick(i) {
+  const x = mnList[i], inp = mnIn; if (!x || !inp) return; const pos = inp.selectionStart, ins = "@" + x.n.replace(/\s+/g, "_") + " ";
+  inp.value = inp.value.slice(0, mnAt) + ins + inp.value.slice(pos); inp.setSelectionRange(mnAt + ins.length, mnAt + ins.length); mnClose(); inp.dispatchEvent(new Event("input", { bubbles: true })); inp.focus();
+}
+document.addEventListener("input", (e) => { if (e.target.matches?.(MENTION)) mnOpen(e.target); else if (!mnEl.hidden) mnClose(); });
+document.addEventListener("keydown", (e) => {
+  if (mnEl.hidden) return; const k = e.key;
+  if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); e.stopPropagation(); mnSel = (mnSel + (k === "ArrowDown" ? 1 : -1) + mnList.length) % mnList.length; mnDraw(); }
+  else if (k === "Enter" || k === "Tab") { e.preventDefault(); e.stopPropagation(); mnPick(mnSel); }
+  else if (k === "Escape") { e.preventDefault(); e.stopPropagation(); mnClose(); }
+  else if (k === "ArrowLeft" || k === "ArrowRight" || k === "Home" || k === "End") setTimeout(() => mnIn && mnOpen(mnIn));
+}, true);
+mnEl.addEventListener("mousedown", (e) => { const li = e.target.closest("[data-i]"); if (li) { e.preventDefault(); mnPick(+li.dataset.i); } });
+document.addEventListener("focusout", (e) => { if (e.target === mnIn) setTimeout(() => { if (document.activeElement !== mnIn) mnClose(); }, 120); });
+const peopleList = document.createElement("datalist"); peopleList.id = "peopleList"; document.body.append(peopleList);
+const refreshPeopleList = () => (peopleList.innerHTML = peopleHere().map((x) => `<option value="${esc(x.n)}">`).join(""));
+document.addEventListener("focusin", (e) => { if (e.target.id === "ceWait") refreshPeopleList(); });

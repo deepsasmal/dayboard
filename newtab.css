@@ -1348,3 +1348,10 @@ body.zen .rings{display:none!important}
 @media(max-width:900px){.plane{grid-template-columns:1fr}.phd{display:none}}
 body.zen #peopleBtn{display:none}
 .pvhead .rtitle,.pvhead .rsub{text-align:left;justify-self:start}.pvhead .rsub{width:100%;max-width:70ch}.pvhead .rtitle{font-size:clamp(28px,3vw,40px)}
+
+/* @ mentions */
+.mention{position:fixed;z-index:60;list-style:none;margin:0;padding:6px;min-width:240px;max-width:320px;border-radius:16px;background:rgba(22,22,22,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 50px rgba(0,0,0,.5);animation:in .18s var(--ease)}
+.mention[hidden]{display:none}
+.mention li{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:11px;cursor:pointer;font-size:13.5px;color:var(--bone)}
+.mention li.on,.mention li:hover{background:rgba(255,255,255,.1);color:#fff}
+.mention .pav{width:26px;height:26px;font-size:10.5px}.mention b{font-weight:400;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mention small{font-size:10.5px;color:var(--slate);letter-spacing:.04em}
