@@ -12,7 +12,7 @@ const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice
 const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x)); // key order differs after a round trip through Chrome
 const store = {
   async get() {
-    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol", "archive", "inbox"]);
+    if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol", "archive", "inbox", "care"]);
     return JSON.parse(localStorage.dayboard || "{}");
   },
   mine: {}, // what this page itself wrote, by key (last few versions). Chrome echoes our own writes back as "changes", sometimes after we have already edited again; applying that echo would roll newer work back.
@@ -22,8 +22,8 @@ const store = {
     localStorage.dayboard = JSON.stringify({ ...JSON.parse(localStorage.dayboard || "{}"), ...o });
   },
 };
-let archive = [], inbox = [], tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
-let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", chime: "on", heads: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
+let care = {}, archive = [], inbox = [], tasks = [], links = [], saved = [], paint = {}, trash = [], snaps = {}, projects = ["Inbox", "Work", "Personal"];
+let prefs = { city: "London", clock: "24", art: "both", wx: "on", golden: "on", care: "on", chime: "on", heads: "on", clockStyle: "solid", paintHide: false, favs: [], glass: 50, units: null, openDay: "on", intent: null, fresh: "on", rings: "on", birth: "", lifespan: 80, lastBackup: 0, nudgeUntil: 0, firstSeen: 0 };
 const CITIES = [
   { name: "Hyderabad", lat: 17.385, lon: 78.4867, tz: "Asia/Kolkata" }, { name: "Bengaluru", lat: 12.9716, lon: 77.5946, tz: "Asia/Kolkata" },
   { name: "Mumbai", lat: 19.076, lon: 72.8777, tz: "Asia/Kolkata" }, { name: "Delhi", lat: 28.6139, lon: 77.209, tz: "Asia/Kolkata" },
@@ -1291,7 +1291,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ui.renam
 document.addEventListener("focusout", (e) => { if (e.target.id === "pren" && ui.renaming) { ui.renaming = null; setTimeout(render); } }); // click-away cancels
 
 store.get().then((s) => { tasks = s.tasks || []; projects = s.projects || projects;
-  paint = s.paint || {}; trash = s.trash || []; snaps = s.snaps || {}; archive = s.archive || []; inbox = s.inbox || []; bellDraw();
+  paint = s.paint || {}; trash = s.trash || []; snaps = s.snaps || {}; archive = s.archive || []; inbox = s.inbox || []; care = s.care || {}; bellDraw(); careDraw();
   prefs = { ...prefs, ...(s.prefs || {}) };
   if (!prefs.firstSeen) { prefs.firstSeen = Date.now(); s.dirty = true; }
   const t0 = today(); // nothing goes "overdue": unfinished tasks quietly move to today and remember where they came from
@@ -1431,7 +1431,7 @@ const glassK = (v) => (v <= 50 ? 1 + (50 - v) / 50 * .6 : 1 - (v - 50) / 50 * .7
 /* widgets: each can be switched off; the choice is a list of names on <body> that the stylesheet hides */
 const WIDGETS = [
   ["week", "Week strip", "The days of this week, with the Day, Week, Month, Year picker."], ["sun", "Sun and moon arc", "Sunrise, sunset and the moon's phase."],
-  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""],
+  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""], ["wxw", "Weather strip", "The next 12 hours, with rain."], ["carew", "Water, stretch and breath", "Quiet ticks and a one-minute breath."],
   ["dayw", "Day timeline", "Today by the hour, with a pointer for now and your meetings."], ["rings", "Time rings", "Day, week, month and year progress."],
   ["wind", "Winding down", "The evening note with Wrap up the day."], ["focus", "What matters today", "Up to three pinned tasks."],
   ["nextmtg", "Next meeting line", "Under the greeting. Needs a calendar."], ["wx", "Weather chip", "The temperature beside the date."],
@@ -1457,12 +1457,13 @@ function syncPrefsUI() {
   $("#prefCity").value = place().name; $("#prefGlass").value = Number.isFinite(prefs.glass) ? prefs.glass : 50; applyGlass();
   applyPaintHide();
   document.body.dataset.clock = prefs.clockStyle || "solid"; try { localStorage["dayboard:cs"] = prefs.clockStyle || "solid"; } catch {}
-  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
+  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefCare", "care"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
   $("#backupInfo").textContent = prefs.lastBackup ? `Last backup: ${ago(prefs.lastBackup)}.` : "No backup yet.";
 }
 $("#prefCity").onchange = (e) => { prefs.city = e.target.value; save(); renderSun(); syncPrefsUI(); wxFetch(); };
 $("#prefGolden").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.golden = b.dataset.v; save(); syncPrefsUI(); goldenKey = ""; renderSun(); };
 $("#prefChime").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.chime = b.dataset.v; save(); syncPrefsUI(); if (prefs.chime === "on") chime(); };
+$("#prefCare").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.care = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefHeads").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.heads = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefClockStyle").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.clockStyle = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefFresh").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.fresh = b.dataset.v; save(); syncPrefsUI(); if (prefs.fresh === "on") libFetch().catch(() => {}); };
@@ -2232,16 +2233,16 @@ function wxToggle(on = $("#wxPop").hidden) { if (on) drawWx(); $("#wxPop").hidde
 $("#wxChip").onclick = (e) => { e.stopPropagation(); wxToggle(); };
 document.addEventListener("click", (e) => { if (!$("#wxPop").hidden && !e.target.closest("#wxPop, #wxChip")) wxToggle(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#wxPop").hidden) { wxToggle(false); $("#wxChip").focus(); } });
-const wxApply = () => { wxStart(); renderWx(); };
+const wxApply = () => { wxStart(); renderWx(); renderWxw(); };
 async function wxFetch() {
   const P = place(); let stale = null;
-  try { const c = JSON.parse(localStorage["dayboard:wx"]); if (c.v === 2 && c.city === P.name) { stale = c; if (Date.now() - c.t < 18e5) { wxData = c; return wxApply(); } } } catch {}
+  try { const c = JSON.parse(localStorage["dayboard:wx"]); if (c.v === 3 && c.city === P.name) { stale = c; if (Date.now() - c.t < 18e5) { wxData = c; return wxApply(); } } } catch {}
   try {
     const q = `latitude=${P.lat}&longitude=${P.lon}&timezone=auto&forecast_days=8&forecast_hours=14&current=temperature_2m,apparent_temperature,weather_code,cloud_cover,relative_humidity_2m,wind_speed_10m,is_day`
-      + `&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
+      + `&hourly=temperature_2m,weather_code,is_day,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`;
     const r = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, { signal: AbortSignal.timeout(10000) }).then((x) => x.json()), c = r.current, d = r.daily;
-    wxData = { v: 2, city: P.name, t: Date.now(), code: c.weather_code, cloud: c.cloud_cover, temp: c.temperature_2m, feels: c.apparent_temperature, hum: c.relative_humidity_2m, wind: c.wind_speed_10m, day: !!c.is_day, rain: d.precipitation_probability_max?.[0] ?? null,
-      hours: r.hourly.time.map((t, i) => ({ t, T: r.hourly.temperature_2m[i], c: r.hourly.weather_code[i], d: !!r.hourly.is_day[i] })),
+    wxData = { v: 3, city: P.name, t: Date.now(), code: c.weather_code, cloud: c.cloud_cover, temp: c.temperature_2m, feels: c.apparent_temperature, hum: c.relative_humidity_2m, wind: c.wind_speed_10m, day: !!c.is_day, rain: d.precipitation_probability_max?.[0] ?? null,
+      hours: r.hourly.time.map((t, i) => ({ t, T: r.hourly.temperature_2m[i], c: r.hourly.weather_code[i], d: !!r.hourly.is_day[i], p: r.hourly.precipitation_probability?.[i] ?? 0 })),
       daily: Object.fromEntries(d.time.map((k, i) => [k, { c: d.weather_code[i], hi: d.temperature_2m_max[i], lo: d.temperature_2m_min[i], p: d.precipitation_probability_max[i] }])) };
     try { localStorage["dayboard:wx"] = JSON.stringify(wxData); } catch {}
   } catch { if (stale) wxData = stale; } // offline: keep the last sky
@@ -3022,7 +3023,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { re
 
 /* ---------- notifications: a bell with the last two weeks of nudges, meeting heads-ups and tidy-ups, and a soft chime ---------- */
 const EXT = !!globalThis.chrome?.runtime?.id;
-const KIND = { meeting: "Meeting", task: "Reminder", golden: "Light", tidy: "Tidy" };
+const KIND = { care: "Care", meeting: "Meeting", task: "Reminder", golden: "Light", tidy: "Tidy" };
 function inboxAdd(kind, title, body) { // page-made entries are silent; the background adds the ones that chime
   if (!EXT) return; inbox.unshift({ id: crypto.randomUUID(), ts: Date.now(), kind, title, body, read: false }); store.set({ inbox: inbox.slice(0, 100) }); bellDraw();
 }
@@ -3060,6 +3061,7 @@ $("#inboxPop").onclick = (e) => { if (e.target.id === "ibClear") { inbox = []; s
 document.addEventListener("click", (e) => { if (!$("#inboxPop").hidden && !e.target.closest("#inboxPop, #bellBtn")) bellToggle(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#inboxPop").hidden) { bellToggle(false); $("#bellBtn").focus(); } });
 if (EXT) chrome.storage.onChanged.addListener((ch, area) => { // the background wrote something: update the bell, and chime once for each new alert
+  if (area === "local" && ch.care) { care = ch.care.newValue || {}; careDraw(); }
   if (area !== "local" || !ch.inbox) return;
   const was = new Set(inbox.map((x) => x.id)); inbox = ch.inbox.newValue || [];
   const fresh = inbox.filter((x) => x.ding && !was.has(x.id) && !x.read);
@@ -3137,3 +3139,50 @@ setInterval(live(() => { // the pointer itself glides every few seconds, without
   const n = Date.now(); if (today() !== ptrDay) { ptrDay = today(); dwOff = 0; renderDayW(); if (cxMode === "day") cxDraw(); return; }
   document.querySelectorAll(".tlnow").forEach((p) => { p.style.top = ((n - dayStart(ptrDay)) / 36e5) * TLH + "px"; p.firstChild.textContent = hhmm(n); });
 }), 5000);
+
+/* ---------- weather strip: the next 12 hours, with rain as small bars ---------- */
+function renderWxw() {
+  const box = $("#wxw"), H = (wxData?.hours || []).slice(0, 13); if (H.length < 6) { box.hidden = true; return; } box.hidden = false;
+  const Ts = H.map((h) => h.T), lo = Math.min(...Ts), hi = Math.max(...Ts), sx = (i) => 8 + (i * 234) / (H.length - 1), sy = (t) => 10 + (hi === lo ? 14 : ((hi - t) / (hi - lo)) * 28);
+  const line = H.map((h, i) => `${i ? "L" : "M"}${sx(i).toFixed(1)} ${sy(h.T).toFixed(1)}`).join("");
+  const bars = H.map((h, i) => (h.p >= 20 ? `<rect x="${(sx(i) - 3.5).toFixed(1)}" y="${(70 - (h.p / 100) * 24).toFixed(1)}" width="7" height="${((h.p / 100) * 24).toFixed(1)}" rx="2" opacity="${(0.25 + h.p / 160).toFixed(2)}"/>` : "")).join("");
+  const at = (t) => { const [hh, mm] = t.slice(11, 16).split(":"); return prefs.clock === "12" ? `${(+hh + 11) % 12 + 1}${+hh < 12 ? "am" : "pm"}` : `${hh}:${mm}`; };
+  const wet = H.findIndex((h, i) => i > 0 && h.p >= 50), maxP = Math.max(...H.map((h) => h.p));
+  const note = H[0].p >= 50 ? "Rain now" : wet > 0 ? `Rain around ${at(H[wet].t)}` : maxP >= 30 ? "A chance of rain" : "Dry";
+  box.innerHTML = `<div class="wxh"><span>Next 12 hours</span><b>${deg(lo)} – ${deg(hi)}</b></div>
+    <svg viewBox="0 0 250 74" role="img" aria-label="Temperature and rain, next 12 hours"><g class="wxbars">${bars}</g><path class="wxline" d="${line}" fill="none"/><circle class="wxdot" cx="${sx(0)}" cy="${sy(H[0].T).toFixed(1)}" r="3.5"/></svg>
+    <div class="wxf"><span>Now</span><b class="${wet > 0 || H[0].p >= 50 ? "wet" : ""}">${note}</b><span>+12h</span></div>`;
+}
+
+/* ---------- care: water, stretch and a breath, all quiet ---------- */
+const careToday = () => { if (care.d !== today()) care = { ...care, d: today(), w: 0, s: 0 }; return care; };
+const CGOAL = 8, CFROM = 9, CTO = 19;
+const ICO = { water: '<path d="M12 3.5c3.2 4 5.2 6.6 5.2 9.3a5.2 5.2 0 0 1-10.4 0c0-2.7 2-5.3 5.2-9.3z"/>', stretch: '<circle cx="12" cy="5" r="2"/><path d="M12 8v6m0 0-3 6m3-6 3 6M5 10l7-2 7 2"/>' };
+const svgI = (k) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>`;
+function careLog(k, r) { care.log = [...(care.log || []), { t: Date.now(), k, r }].filter((e) => Date.now() - e.t < 14 * 864e5).slice(-300); }
+function careDraw() {
+  const c = careToday(), now = Date.now(), d0 = new Date(), at = (h) => new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), h).getTime();
+  const w = c.w || 0, pace = Math.max(0, Math.min(1, (now - at(CFROM)) / (at(CTO) - at(CFROM)))) * CGOAL, behind = Math.round(pace - w);
+  const m = c.ls ? Math.round((now - c.ls) / 6e4) : null, ago = m === null ? "–" : m < 60 ? m + "m ago" : Math.floor(m / 60) + "h ago";
+  // today's rhythm: every logged water, stretch and skip along the working day
+  const X0 = at(CFROM - 1), X1 = at(CTO + 1), x = (t) => (8 + Math.max(0, Math.min(1, (t - X0) / (X1 - X0))) * 234).toFixed(1);
+  const todays = (c.log || []).filter((e) => lday(e.t) === today());
+  const dots = todays.map((e) => e.r === "skip" ? `<path d="M${+x(e.t) - 3} 8l6 6m0-6l-6 6" class="cs"><title>Skipped ${e.k}</title></path>` : e.k === "water" ? `<circle cx="${x(e.t)}" cy="11" r="4" class="cw"><title>Water ${hhmm(e.t)}</title></circle>` : `<circle cx="${x(e.t)}" cy="11" r="4" class="cst"><title>Stretch ${hhmm(e.t)}</title></circle>`).join("");
+  const wk = [...Array(7)].map((_, i) => plus(today(), -i)), wlog = (c.log || []).filter((e) => wk.includes(lday(e.t)));
+  const wDone = wlog.filter((e) => e.k === "water" && e.r !== "skip").length, skipped = wlog.filter((e) => e.r === "skip").length, days = new Set(wlog.map((e) => lday(e.t))).size;
+  const cap = days > 1 ? `Last 7 days · ${(wDone / days).toFixed(1)} glasses a day${skipped ? ` · ${skipped} skipped` : ""}` : now < at(CFROM) ? "The day has not started" : now >= at(CTO) ? "Done for the day" : behind >= 1 ? `${behind} glass${behind > 1 ? "es" : ""} behind the pace` : "On pace";
+  $("#carew").innerHTML = `<div class="carecard">
+    <div class="careh"><span>Care</span><small>${esc(w >= CGOAL ? "Goal reached" : behind >= 1 && now >= at(CFROM) && now < at(CTO) ? `${behind} behind` : "On pace")}</small></div>
+    <button type="button" class="carewater" data-c="water" title="Log a glass of water">${svgI("water")}<span class="pips" aria-hidden="true">${Array.from({ length: CGOAL }, (_, i) => `<i class="${i < w ? "on" : ""}${i === Math.round(pace) - 1 && w < CGOAL ? " pace" : ""}"></i>`).join("")}</span><b>${w}/${CGOAL}</b></button>
+    <div class="carerow"><button type="button" class="carechip" data-c="stretch" title="Log a stretch">${svgI("stretch")}<span>Stretch</span><b>${c.s || 0}</b><small>${ago}</small></button>
+    <button type="button" class="orbbtn" data-c="breath" aria-label="One-minute breath" title="One minute of breathing  (B)"><i></i></button></div>
+    <svg class="rhythm" viewBox="0 0 250 22" role="img" aria-label="Today's water and stretches"><line x1="8" y1="11" x2="242" y2="11" class="rl"/>${(now > X0 && now < X1) ? `<line x1="${x(now)}" x2="${x(now)}" y1="3" y2="19" class="rn"/>` : ""}${dots}</svg>
+    <p class="carecap">${esc(cap)}</p></div>`;
+}
+$("#carew").onclick = (e) => {
+  const b = e.target.closest("[data-c]"); if (!b) return; const k = b.dataset.c;
+  if (k === "breath") return openBreath();
+  const c = careToday(); if (k === "water") { c.w = (c.w || 0) + 1; c.lw = Date.now(); careLog("water", "done"); } else { c.s = (c.s || 0) + 1; c.ls = Date.now(); careLog("stretch", "done"); }
+  c.k = { ...(c.k || {}), [k === "water" ? "w" : "s"]: 0 }; care = { ...c }; store.set({ care }); careDraw(); b.blur?.();
+};
+setInterval(live(careDraw), 6e4);

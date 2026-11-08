@@ -82,6 +82,7 @@
   <section class="spg" data-pg="notify" hidden><header><h2>Notifications</h2><p>What is allowed to reach you.</p></header>
   <div class="prefrow"><span class="pl">Meeting heads-up (15 min)<em>A quiet note before each meeting. Reminders wait until it ends.</em></span><span class="seg" id="prefHeads" role="group" aria-label="Meeting heads-up"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span class="pl">Soft chime<em>A gentle two-note sound when something arrives.</em></span><span class="seg" id="prefChime" role="group" aria-label="Chime"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span class="pl">Water and stretch reminders<em>A quiet note in working hours, never during a meeting. Tick them off from the page.</em></span><span class="seg" id="prefCare" role="group" aria-label="Water and stretch reminders"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span class="pl">Golden-hour nudge<em>A note 30 minutes before sunset.</em></span><span class="seg" id="prefGolden" role="group" aria-label="Golden-hour nudge"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   </section>
   <section class="spg" data-pg="cal" id="olSec" hidden><header><h2>Calendars</h2><p>Meetings appear under the greeting and in the calendar. Add as many ICS links as you like.</p></header>
@@ -178,12 +179,16 @@
     <div class="nmwrap"><button type="button" id="nextMtg" class="nextmtg" hidden title="Open your calendar"></button><div id="freeCard" class="moonpop freecard" hidden role="dialog" aria-label="Free time"></div></div>
     <button type="button" id="intent" class="intent" hidden title="Your intention for today. Click to change it."></button>
     </div>
+    <div class="mcol">
     <figure class="paintfig" id="paintFig">
       <button type="button" id="paintBtn" class="paintcorner" title="Today's painting"><canvas id="paintCanvas" aria-hidden="true"></canvas></button>
       <button type="button" id="paintHide" class="phide" aria-label="Hide this painting" title="Hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A9.7 9.7 0 0 1 12 5c5 0 8.5 4.2 9.7 7a11.6 11.6 0 0 1-2.6 3.7M6.6 6.6A11.7 11.7 0 0 0 2.3 12c1.2 2.8 4.7 7 9.7 7a9.5 9.5 0 0 0 4.4-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>
       <figcaption id="paintCap"></figcaption>
       <button type="button" id="paintShow" class="pshow" aria-label="Show the painting">Show painting</button>
     </figure>
+    <section id="wxw" class="wxw" hidden aria-label="Weather, next 12 hours"></section>
+    <section id="carew" class="carew" aria-label="Water, stretch and breathing"></section>
+    </div>
     </div>
     <figure class="quote">
       <blockquote id="quote"></blockquote>
