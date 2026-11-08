@@ -2555,50 +2555,14 @@ function timeFractions(now = new Date()) { // how far through the day, week (Mon
   const dim = new Date(y, m + 1, 0).getDate(), diy = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365, doy = Math.round((sod - new Date(y, 0, 1)) / 864e5);
   return [[dayF, 1], [((now.getDay() + 6) % 7 + dayF) / 7, 7], [(d - 1 + dayF) / dim, dim], [(doy + dayF) / diy, diy]];
 }
-const RING_R = [72, 57, 42, 27], RING_W = 11; // px in the 164px square
-let ringHot = -1, ringFr = null;
-function drawRims(cv, fr, k = 1) { // the glass edge of each ring, and a bead at the head of each arc (the frosted bands themselves are CSS)
-  const S = 164, dpr = Math.min(devicePixelRatio || 1, 2); cv.width = S * dpr; cv.height = S * dpr;
-  const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, S, S);
-  const c = S / 2, start = -Math.PI / 2;
-  fr.forEach(([f], i) => {
-    const dim = ringHot < 0 || ringHot === i ? 1 : .3, hot = ringHot === i, I = RING[i][1] * dim, r = RING_R[i], h = RING_W / 2, a1 = start + Math.max(f * k, .004) * Math.PI * 2;
-    x.lineWidth = hot ? 1.6 : 1; x.strokeStyle = `rgba(255,255,255,${.16 * dim})`; for (const rr of [r - h, r + h]) { x.beginPath(); x.arc(c, c, rr, 0, Math.PI * 2); x.stroke(); } // the groove's edges
-    const g = x.createConicGradient(start, c, c), head = Math.min(Math.max(f * k, .004), .999);
-    g.addColorStop(0, `rgba(255,255,255,${.12 * I})`); g.addColorStop(head, `rgba(255,255,255,${.85 * I})`); g.addColorStop(Math.min(head + .0001, 1), "rgba(255,255,255,0)");
-    x.strokeStyle = g; for (const rr of [r - h, r + h]) { x.beginPath(); x.arc(c, c, rr, start, a1); x.stroke(); } // brighter along the arc
-    x.shadowColor = "rgba(255,255,255,.8)"; x.shadowBlur = hot ? 16 : 9; x.fillStyle = `rgba(255,255,255,${.95 * I})`; x.beginPath(); x.arc(c + r * Math.cos(a1), c + r * Math.sin(a1), h * (hot ? .85 : .62), 0, Math.PI * 2); x.fill(); x.shadowBlur = 0;
-  });
-}
 let ringsShown = false;
-function renderRings() {
+function renderRings() { // four plain bars: the filled part is what has already gone
   const el = $("#rings"); el.hidden = prefs.rings === "off"; if (el.hidden) return;
-  const fr = timeFractions();
-  if (!el.firstChild) el.innerHTML = `<span class="rdisc">${RING.map(([, I], i) => `<i class="rt" data-i="${i}" style="--r:${RING_R[i]}px"></i><i class="rf" data-i="${i}" style="--r:${RING_R[i]}px;--k:${I};--f:0"></i>`).join("")}<canvas class="rcv"></canvas><span class="rmid"><b></b></span></span><ul class="rleg">${RING.map(([n, I], i) => `<li data-i="${i}"><i style="background:rgba(255,255,255,${(.25 + .7 * I).toFixed(2)})"></i><b>${n}</b><span></span></li>`).join("")}</ul>`;
-  const cv = el.querySelector("canvas"), bands = el.querySelectorAll(".rf"); el.dataset.f = fr.map(([f]) => f.toFixed(4)).join(" ");
-  el.querySelectorAll(".rleg span").forEach((s, i) => (s.textContent = leftText((1 - fr[i][0]) * fr[i][1] * 864e5)));
+  const fr = timeFractions(), first = !el.firstChild;
+  el.innerHTML = `<p class="tph">Time passing</p>` + RING.map(([name], i) => { const f = fr[i][0];
+    return `<div class="tp${i === 0 ? " day" : ""}" style="--f:${ringsShown ? f.toFixed(4) : 0}" data-f="${f.toFixed(4)}"><b>${name}</b><span class="bar" aria-hidden="true"><i></i></span><em>${Math.round(f * 100)}%</em><small>${leftText((1 - f) * fr[i][1] * 864e5)}</small></div>`; }).join("");
   el.setAttribute("aria-label", "Time passing. " + fr.map(([f], i) => `${RING[i][0]} ${Math.round(f * 100)} percent`).join(", "));
-  ringFr = fr; rmid();
-  const paint = (k) => { bands.forEach((n, i) => n.style.setProperty("--f", Math.max(fr[i][0] * k, .004).toFixed(4))); drawRims(cv, fr, k); };
-  if (ringsShown) return paint(1);
-  ringsShown = true; const t0 = performance.now(); // the first time, the rings sweep in
-  const step = (t) => { const k = Math.min(1, (t - t0) / 1200); paint(1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); };
-  requestAnimationFrame(step);
-}
-const rmid = () => { const b = $("#rings .rmid b"); if (b && ringFr) b.textContent = `${Math.round(ringFr[ringHot < 0 ? 0 : ringHot][0] * 100)}%`; }; // the middle shows the day, or the ring you point at
-function setRingHot(i) { // light one ring (and its legend row), dim the others
-  if (i === ringHot) return; ringHot = i; rmid(); const el = $("#rings"); el.classList.toggle("hovering", i >= 0);
-  el.querySelectorAll(".rdisc i").forEach((n) => n.classList.toggle("hot", +n.dataset.i === i)); el.querySelectorAll(".rleg li").forEach((n) => n.classList.toggle("hot", +n.dataset.i === i));
-  if (ringFr) drawRims(el.querySelector("canvas"), ringFr, 1);
-}
-{
-  const el = $("#rings");
-  el.addEventListener("pointerover", (e) => { const li = e.target.closest(".rleg li"); if (li) setRingHot(+li.dataset.i); });
-  el.addEventListener("pointermove", (e) => { // over the rings themselves: whichever band the pointer is on
-    const d = e.target.closest(".rdisc"); if (!d) return; const r = d.getBoundingClientRect(), dist = Math.hypot(e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2);
-    const i = RING_R.findIndex((rr) => Math.abs(dist - rr) <= RING_W / 2 + 3); setRingHot(i);
-  });
-  el.addEventListener("pointerleave", () => setRingHot(-1));
+  if (!ringsShown) { ringsShown = true; requestAnimationFrame(() => requestAnimationFrame(() => el.querySelectorAll(".tp").forEach((n) => n.style.setProperty("--f", n.dataset.f)))); } // the first time, the bars fill in
 }
 renderRings(); setInterval(live(renderRings), 3e4);
 $("#rings").onclick = () => openTime();

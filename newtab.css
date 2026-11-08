@@ -789,25 +789,13 @@ body.looking .wx{opacity:.5;transition:opacity 1s}
 .wpnew{position:absolute;top:7px;left:7px;font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#0a0a0a;background:var(--accent);padding:2px 7px;border-radius:9999px}
 
 /* time rings: each ring is a band of frosted glass (it blurs what is behind it), cut into a ring; no card behind them */
-.rings{display:flex;align-items:center;gap:26px;margin:0 0 24px;padding:0;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.rdisc{--w:11px;position:relative;flex:none;width:164px;height:164px;display:grid;place-items:center;transition:transform .5s var(--ease)}
-.rings:hover .rdisc{transform:scale(1.03)}
-.rdisc i{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;pointer-events:none;
   -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent calc(var(--r) - var(--w)/2 - .6px),#000 calc(var(--r) - var(--w)/2),#000 calc(var(--r) + var(--w)/2),transparent calc(var(--r) + var(--w)/2 + .6px)),conic-gradient(from -90deg,#000 calc(var(--f,1) * 360deg),transparent 0);
   mask-image:radial-gradient(circle at 50% 50%,transparent calc(var(--r) - var(--w)/2 - .6px),#000 calc(var(--r) - var(--w)/2),#000 calc(var(--r) + var(--w)/2),transparent calc(var(--r) + var(--w)/2 + .6px)),conic-gradient(from -90deg,#000 calc(var(--f,1) * 360deg),transparent 0);
   -webkit-mask-composite:source-in;mask-composite:intersect}
-.rdisc .rt{background:rgba(255,255,255,.07);backdrop-filter:blur(7px) saturate(1.3);-webkit-backdrop-filter:blur(7px) saturate(1.3)}
-.rdisc .rf{background:conic-gradient(from -90deg,rgba(255,255,255,calc(.1 * var(--k))),rgba(255,255,255,calc(.62 * var(--k))) calc(var(--f,1) * 360deg));
   backdrop-filter:blur(9px) saturate(1.7) brightness(1.18);-webkit-backdrop-filter:blur(9px) saturate(1.7) brightness(1.18)}
 .rcv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .rmid{position:relative;z-index:1;display:grid;justify-items:center}
 .rmid b{font-size:17px;font-weight:300;letter-spacing:-.03em;color:transparent;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.55));-webkit-background-clip:text;background-clip:text;-webkit-text-stroke:.4px rgba(255,255,255,.4);filter:drop-shadow(0 2px 10px rgba(0,0,0,.35))}
-.rleg{list-style:none;padding:0;display:grid;gap:6px;font-size:13px}
-.rleg li{display:grid;grid-template-columns:10px 54px auto;align-items:center;gap:11px;color:var(--ash)}
-.rleg i{width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
-.rleg b{font-weight:500;color:#fff;letter-spacing:.02em}
-.rleg span{color:var(--ash);font-variant-numeric:tabular-nums}
-.rings:hover .rleg span{color:#fff}
 body.zen .rings{display:none!important}
 /* the time view: life in weeks, the year in dots */
 .timev{display:flex;flex-direction:column;align-items:center;gap:10px;overflow:hidden}
@@ -863,11 +851,6 @@ body.zen .rings{display:none!important}
 @media(max-width:820px){.calhead{gap:8px;flex-wrap:wrap;padding-right:34px}.caltitle{flex:1 1 100%;order:-1;font-size:28px}.calnav{width:36px;height:36px}.calhead .pill{margin-left:auto}}
 
 /* hover: the ring under the pointer (or the legend row) lights up, the rest recede */
-.rdisc i{transition:opacity .3s ease}
-.rings.hovering .rdisc i{opacity:.28}.rings.hovering .rdisc i.hot{opacity:1}
-.rleg li{transition:opacity .3s ease}.rleg li i{transition:transform .3s var(--ease),background .3s}
-.rings.hovering .rleg li:not(.hot){opacity:.45}
-.rleg li.hot b,.rleg li.hot span{color:#fff}.rleg li.hot i{transform:scale(1.5);background:#fff!important}
 
 /* the small painting can be hidden; point at where it was and "Show painting" appears */
 .paintfig{position:relative}
@@ -1301,3 +1284,39 @@ body.zen .mcol{display:none}
 .carechip{gap:7px}
 .sub .carew{margin-top:22px;width:min(340px,100%)}.timerow .mcol{gap:0}body.zen .carew{display:none!important}
 .timerow>.carew{grid-column:1;grid-row:3;margin-top:18px;width:340px;max-width:100%}@media(max-width:760px){.timerow>.carew{grid-row:auto}}
+
+/* time passing: four bars, the filled part is what is already behind you */
+.rings{display:grid;gap:12px;width:100%;margin:0;padding:0;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.tph{font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ash)}
+.tp{display:grid;grid-template-columns:48px 1fr 38px 74px;align-items:center;gap:12px;font-size:13px}
+.tp b{font-weight:500;color:var(--ash)}
+.tp .bar{position:relative;height:8px;border-radius:8px;background:rgba(255,255,255,.12);overflow:visible}
+.tp .bar i{position:absolute;left:0;top:0;bottom:0;width:calc(var(--f) * 100%);min-width:8px;border-radius:8px;background:linear-gradient(90deg,rgba(255,255,255,.35),rgba(255,255,255,.92));transition:width 1.4s var(--ease)}
+.tp .bar i::after{content:"";position:absolute;right:-1px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;box-shadow:0 0 10px rgba(255,255,255,.7)}
+.tp.day .bar i{background:linear-gradient(90deg,rgba(232,168,92,.4),var(--accent))}.tp.day .bar i::after{background:var(--accent);box-shadow:0 0 12px rgba(232,168,92,.8)}.tp.day b{color:var(--accent)}
+.tp em{font-style:normal;color:#fff;font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.tp small{font-size:12px;color:var(--slate);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rings:hover .tp small{color:var(--ash)}
+body.zen .rings{display:none!important}
+
+/* alignment pass: one container, matching columns, cards on one width */
+.nav{width:min(1360px,calc(100% - 32px))}
+@media(min-width:1100px){
+  .shell{grid-template-columns:minmax(0,1fr) 340px}
+  .hero{grid-template-columns:minmax(0,1fr) 340px;gap:40px}
+}
+.hl .quote{max-width:min(100%,700px)}
+.hl .now,.nowdrop{max-width:480px}.timerow>.carew{width:480px}
+.rhythm{margin:0 -8px;width:calc(100% + 16px)}
+.dwh{padding:0 0 8px}
+.hr .wind .pill.solid{margin-left:0}
+.cols{align-items:stretch}.col{display:flex;flex-direction:column}.col ul{flex:1}
+.qnlabel{margin-left:0;padding-left:2px}
+.cap{padding:6px 6px 6px 16px;border-radius:30px;background:rgba(10,10,10,calc(.5*var(--gt)));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);align-items:center}
+/* the corner caption collapses to its two buttons; the painting's name opens on hover, so it never sits on top of your content */
+@media(hover:hover) and (pointer:fine){
+  .cap{padding:6px;gap:0}
+  .cap .capbtn{max-width:0;opacity:0;overflow:hidden;padding-left:0;padding-right:0;margin:0;white-space:nowrap;transition:max-width .5s var(--ease),opacity .35s var(--ease),margin .5s var(--ease)}
+  .cap:hover .capbtn,.cap:focus-within .capbtn{max-width:330px;opacity:1;margin-right:10px}
+}
+.tp{grid-template-columns:44px 1fr 36px 68px;gap:10px}
