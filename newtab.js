@@ -1815,7 +1815,7 @@ $("#snapList").onclick = (e) => { // non-destructive: only brings back what is m
 let mtg = null, mtT, mtDue = "today"; // mtg = { id, title, with, body, start, end?, loc?, proj } while a meeting is running (survives closing the tab)
 const mtKeep = () => store.set({ meeting: mtg });
 const mtDueDate = () => ({ today: today(), tomorrow: plus(today(), 1), week: plus(today(), 7) })[mtDue];
-const mtBtn = () => { $("#mtgBtn").classList.toggle("live", !!mtg); $("#mtgBtn").textContent = mtg ? "Meeting · live" : "Meeting"; };
+const mtBtn = () => { $("#mtgBtn").classList.toggle("live", !!mtg); $("#mtgBtn").title = mtg ? "Meeting is live  (M)" : "Meeting notes and tasks  (M)"; $("#mtgBtn").setAttribute("aria-label", mtg ? "Meeting, live" : "Meeting"); };
 const actText = (m) => (m[2] || m[4]).replace(/^(?:todo|action|ai):\s*/i, ""); // "[ ] todo: x" -> "x"
 const mtLines = () => mtg.body.split("\n").map((l, i) => ({ i, m: l.match(ACT) })).filter((x) => x.m);
 function mtMake(raw) { // one task from "Send deck @Priya #client !1"

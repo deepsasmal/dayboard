@@ -1155,3 +1155,13 @@ body.zen .calblock{display:none!important}
 /* quote: fills the width instead of a narrow column */
 .hl .quote{max-width:none;margin-top:26px}.hl .quote blockquote{font-size:clamp(20px,2.1vw,30px);line-height:1.32;text-wrap:balance}
 .hr{align-self:start}
+
+/* icon buttons in the top bar; the calendar picker sits beside the week, not under it */
+.pill.ico{display:grid;place-items:center;width:36px;height:36px;padding:0;flex:none}
+#mtgBtn.live::after{content:"";position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent)}#mtgBtn{position:relative}
+.calblock{display:flex;flex-wrap:wrap;align-items:center;column-gap:12px}
+.calblock .weekrow{margin-bottom:14px}
+.calseg{margin:0 0 2px;transform:translateX(-6px)}.calseg button{min-width:28px;padding:4px 9px;font-weight:500}
+.calblock:hover .calseg,.calblock:focus-within .calseg,.calseg:has([aria-pressed=true]){transform:none}
+.calx{flex:0 0 100%}
+.calseg{background:rgba(22,22,22,calc(.72*var(--gt)));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}.calseg button{color:var(--ash)}
