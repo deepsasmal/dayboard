@@ -721,7 +721,7 @@ function card(t, ci) {
   const k = colOf(t);
   return `<li class="card ${t.done ? "done" : ""}" draggable="true" data-cid="${t.id}">
     <div class="ch"><button class="check" data-done="${t.id}" aria-label="Toggle complete"></button><div class="ct">${esc(t.title)}</div></div>
-    <div class="cm"><span><i class="p p${t.p}"></i>P${t.p}</span>${t.wait ? `<span class="wait">${esc(t.wait)}</span>` : ""}${t.focus && !t.done ? `<span class="wait">Pinned</span>` : ""}
+    <div class="cm"><span><i class="p p${t.p}"></i>P${t.p}</span>${t.wait ? `<span class="wait">${esc(t.wait)}</span>` : ""}${t.focus && !t.done ? `<span class="wait">Pinned</span>` : ""}${t.spent && !t.runAt ? `<span>${esc(spentText(t.spent))}</span>` : ""}
       ${t.due && !t.done ? `<span>${t.wait ? "Follow up " : ""}${fmtDue(t.due)}</span>` : ""}${t.from && !t.wait && !t.done ? `<span>carried from ${fmtDue(t.from)}</span>` : ""}
       ${t.rem && !t.done ? `<span class="mono">${stamp(t.rem)}</span>` : ""}<span>${esc(t.proj)}</span>${t.tags.map((g) => `<span>#${esc(g)}</span>`).join("")}</div>
     <div class="acts">${ci > 0 ? `<button class="sn" data-cmove="${t.id}" data-dir="-1" aria-label="Move to ${COLS[ci - 1][1]}">‹</button>` : ""}${ci < 3 ? `<button class="sn" data-cmove="${t.id}" data-dir="1" aria-label="Move to ${COLS[ci + 1][1]}">›</button>` : ""}
@@ -746,8 +746,13 @@ function renderBoard() {
   }).join("");
   if (ui.editing) $("#ceTitle")?.focus();
 }
+function track(t, was) { // time on a task runs while it sits in Doing and is not paused
+  const is = colOf(t), now = Date.now();
+  if (was !== "doing" && is === "doing") { t.runAt = now; t.startedAt = now; }
+  else if (was === "doing" && is !== "doing" && t.runAt) { t.spent = (t.spent || 0) + now - t.runAt; t.runAt = null; }
+}
 function moveCard(id, col, at) { // at = [cardId, after?] places it next to that card; otherwise it goes to the end
-  const t = tasks.find((x) => x.id === id); if (!t) return;
+  const t = tasks.find((x) => x.id === id); if (!t) return; const was = colOf(t);
   if (colOf(t) !== col) {
     if (col === "waiting") {
       const who = (prompt("Waiting on whom?", t.wait || "") || "").trim(); if (!who) return;
@@ -761,7 +766,7 @@ function moveCard(id, col, at) { // at = [cardId, after?] places it next to that
     const idx = at ? L.findIndex((x) => x.id === at[0]) + (at[1] ? 1 : 0) : L.length;
     t.ord = idx * 1000 + 500;
   }
-  sync(t); save(); render();
+  track(t, was); sync(t); save(); render();
 }
 let cardId = null;
 const clearDrop = () => document.querySelectorAll(".over,.cbefore,.cafter").forEach((n) => n.classList.remove("over", "cbefore", "cafter"));
@@ -777,6 +782,16 @@ document.addEventListener("drop", (e) => {
   e.preventDefault(); const c = e.target.closest("[data-cid]");
   moveCard(cardId, col.dataset.col, c && c.dataset.cid !== cardId && col.dataset.col !== "done" ? [c.dataset.cid, below(e, c)] : null);
 });
+function pinCard(id) { // dropping a card on "What matters today" pins it there as well; it stays on the board
+  const t = tasks.find((x) => x.id === id); if (!t || t.done) return;
+  if (t.focus) return flash("Already on today's list.");
+  if (open().filter((x) => x.focus).length >= 3) return flash("Three is plenty for one day. Unpin one to make room.");
+  t.focus = true; save(); render();
+}
+document.addEventListener("dragover", (e) => { const f = cardId && e.target.closest?.(".hr .focus"); if (!f) return; e.preventDefault(); clearDrop(); f.classList.add("over"); });
+document.addEventListener("drop", (e) => { const f = cardId && e.target.closest?.(".hr .focus"); if (!f) return; e.preventDefault(); const id = cardId; clearDrop(); pinCard(id); });
+document.addEventListener("dragstart", (e) => { if (e.target.closest?.("[data-cid]")) document.body.classList.add("dragcard"); });
+document.addEventListener("dragend", () => document.body.classList.remove("dragcard"));
 document.addEventListener("dragend", () => { cardId = null; clearDrop(); document.querySelectorAll(".dragging").forEach((n) => n.classList.remove("dragging")); });
 document.addEventListener("click", (e) => { // arrows on a card: a keyboard / touch friendly alternative to dragging
   const b = e.target.closest("[data-cmove]"); if (!b) return;
@@ -825,7 +840,7 @@ function render() {
   const fl = open().filter((t) => t.focus || t.focusFor === today());
   $("#focus").innerHTML = fl.length ? fl.map((t) => `<li><button class="check" data-done="${t.id}" aria-label="Complete"></button><span>${esc(t.title)}</span>${t.wait ? `<small>${esc(t.wait)}</small>` : t.focusFor === today() && !t.focus ? `<small>your one thing</small>` : ""}</li>`).join("")
     : `<li class="fe">Star up to three tasks and they will live here.</li>`;
-  renderBoard(); renderWind(); renderNudge(); renderNoteList(); reconcilePaint(); renderPaint();
+  renderNow(); renderBoard(); renderWind(); renderNudge(); renderNoteList(); reconcilePaint(); renderPaint();
   $("#sOpen").textContent = open().length;
   $("#sDue").textContent = open().filter((t) => t.due === today() && !t.wait).length;
   $("#sLate").textContent = open().filter((t) => t.from && !t.wait).length;
@@ -1115,7 +1130,7 @@ $("#add").onsubmit = (e) => {
   err.hidden = true;
   const t = { id: crypto.randomUUID(), title, p, proj: $("#proj").value, tags: tg, wait: who, due: ui.due || (who ? plus(today(), 2) : today()), rem, done: false, status: col === "doing" ? "doing" : "todo", ord: Date.now(), est };
   tasks.push(t); sync(t); save();
-  e.target.reset(); ui.addProj = t.proj; ui.due = ui.rem = null; ui.addCol = null; $("#title").placeholder = PH; whenUI();
+  if (col === "doing") track(t, "todo"); e.target.reset(); ui.addProj = t.proj; ui.due = ui.rem = null; ui.addCol = null; $("#title").placeholder = PH; whenUI();
   if (!passWhen(t)) ui.when = "all"; // never hide what you just added
   render();
 };
@@ -1175,7 +1190,7 @@ document.addEventListener("click", (e) => {
   if (d.tag) ui.tag = ui.tag === d.tag ? null : d.tag;
   const t = tasks.find((x) => x.id === (d.done || d.del || d.snooze || d.focus));
   if (!t && (d.done || d.del || d.snooze || d.focus)) return;
-  if (d.done) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; sync(t); save(); }
+  if (d.done) { const was = colOf(t); t.done = !t.done; t.doneAt = t.done ? Date.now() : null; track(t, was); sync(t); save(); }
   if (d.snooze) { t.due = plus(t.due && t.due > today() ? t.due : today(), 2); save(); }
   if (d.focus) {
     if (!t.focus && open().filter((x) => x.focus).length >= 3) flash("Three is plenty for one day. Unpin one to make room.");
@@ -1329,7 +1344,7 @@ function clean(d) {
       id: x.id, title: str(x.title, 160), p: [1, 2, 3].includes(+x.p) ? +x.p : 2, proj: str(x.proj, 24) || "Inbox",
       tags: Array.isArray(x.tags) ? x.tags.filter((g) => typeof g === "string").map((g) => g.slice(0, 24)).slice(0, 10) : [],
       wait: str(x.wait, 30) || null, est: num(x.est), due: ymd(x.due), from: ymd(x.from), rem: num(x.rem), done: !!x.done, doneAt: num(x.doneAt),
-      focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), focusFor: ymd(x.focusFor),
+      focus: !!x.focus, status: x.status === "doing" ? "doing" : "todo", spent: num(x.spent), ord: num(x.ord) ?? 0, sortedAt: ymd(x.sortedAt), focusFor: ymd(x.focusFor),
     })),
     links: arr(d.links, (x) => okId(x.id) && /^https?:\/\//i.test(x.url) && str(x.name, 1)).map((x) => ({
       id: x.id, name: str(x.name, 32), url: x.url.slice(0, 2000), proj: str(x.proj, 24) || null, dock: !!x.dock,
@@ -2758,8 +2773,8 @@ $("#freeCard").onclick = (e) => {
   if (b.dataset.fr === "another") { const t = suggest(Math.round(nm.gap / 6e4)); if (t) freeSkip.add(t.id); drawFree(); }
   else if (b.dataset.fr === "reset") { freeSkip.clear(); drawFree(); }
   else if (b.dataset.fr === "start") {
-    const t = tasks.find((x) => x.id === b.dataset.id); if (!t) return; const was = t.status;
-    t.status = "doing"; save(); render(); freeToggle(false);
+    const t = tasks.find((x) => x.id === b.dataset.id); if (!t) return; const was = t.status, w0 = colOf(t);
+    t.status = "doing"; track(t, w0); save(); render(); freeToggle(false);
     undoable(`Started “${t.title.slice(0, 32)}”`, () => { t.status = was || "todo"; });
   }
 };
@@ -2982,3 +2997,48 @@ function mtSchedule() { // alarms for the next 48 h of meetings, 15 minutes ahea
     Object.keys(next).forEach((n) => { if (!all.some((a) => a.name === n)) chrome.alarms.create(n, { when: next[n].s - LEAD }); });
   });
 }
+
+/* ---------- Doing now: one task at a time, with its own quiet clock ---------- */
+const spentText = (ms) => { const m = Math.round(ms / 6e4); return m < 1 ? "<1m" : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`; };
+const clockText = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + String(m).padStart(2, "0") : String(m)) + ":" + String(s % 60).padStart(2, "0"); };
+let nowPick = null, nowI = 0;
+const nowList = () => tasks.filter((t) => t.status === "doing" && !t.done && !t.wait).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+const nowTask = () => { const L = nowList(); return L.find((t) => t.id === nowPick) || L[0] || null; };
+const elapsed = (t) => (t.spent || 0) + (t.runAt ? Date.now() - t.runAt : 0);
+function nowTick() {
+  const t = nowTask(), el = $("#nowT"); if (!t || !el || $("#now").hidden) return;
+  const ms = elapsed(t); el.textContent = clockText(ms);
+  if (t.est) { const f = ms / (t.est * 6e4); $("#nowBar").style.width = Math.min(100, f * 100) + "%"; $("#nowBar").parentNode.classList.toggle("over", f > 1); $("#nowHint").textContent = f > 1 ? `Over the ~${t.est}m guess by ${spentText(ms - t.est * 6e4)}. That is fine.` : `of ~${t.est}m`; }
+  else $("#nowHint").textContent = ms > 50 * 6e4 && t.runAt ? "A good moment to stretch." : "";
+}
+function renderNow() {
+  const t = nowTask(), box = $("#now"); box.hidden = !t; clearInterval(nowI); nowI = 0;
+  if (!t) return;
+  const others = nowList().filter((x) => x !== t), up = open().filter((x) => !x.wait && x.status !== "doing").sort((a, b) => (b.focus ? 1 : 0) - (a.focus ? 1 : 0) || (a.due || "9").localeCompare(b.due || "9") || a.p - b.p)[0];
+  box.innerHTML = `<div class="nowh"><span>Doing now</span><b id="nowT" class="mono"></b></div><h3 class="nowtitle">${esc(t.title)}</h3>
+    ${t.est ? `<div class="nowbar"><i id="nowBar"></i></div>` : ""}<p id="nowHint" class="nowhint"></p>
+    <div class="nowact"><button type="button" class="pill solid" data-n="done">Done</button><button type="button" class="pill" data-n="${t.runAt ? "pause" : "resume"}">${t.runAt ? "Pause" : "Resume"}</button><button type="button" class="pill" data-n="back" title="Back to To do">Set aside</button><button type="button" class="pill" data-n="deep" title="Just this, full screen">Go deep</button></div>
+    <input id="nowPark" class="nowpark" type="text" maxlength="140" placeholder="Park a thought for later…" autocomplete="off" aria-label="Park a thought for later">
+    ${others.length ? `<p class="nowalso">Also doing: ${others.slice(0, 3).map((x) => `<button type="button" data-n="pick" data-id="${x.id}">${esc(x.title.slice(0, 24))}</button>`).join("")}</p>` : ""}
+    ${up ? `<p class="nowup">Up next <button type="button" data-n="start" data-id="${up.id}">${esc(up.title.slice(0, 36))}</button></p>` : ""}`;
+  nowTick(); if (t.runAt) nowI = setInterval(live(nowTick), 1000);
+}
+$("#now").onclick = (e) => {
+  const b = e.target.closest("[data-n]"); if (!b) return; const t = nowTask(), k = b.dataset.n, w = t && colOf(t);
+  if (k === "pick") { nowPick = b.dataset.id; return renderNow(); }
+  if (k === "start") { const u = tasks.find((x) => x.id === b.dataset.id); if (!u) return; const w0 = colOf(u); u.status = "doing"; track(u, w0); nowPick = u.id; sync(u); save(); return render(); }
+  if (!t) return;
+  if (k === "deep") return setZen(true);
+  if (k === "pause") { t.spent = elapsed(t); t.runAt = null; }
+  else if (k === "resume") t.runAt = Date.now();
+  else if (k === "done") { const was = colOf(t); t.done = true; t.doneAt = Date.now(); track(t, was); sync(t); nowPick = null; }
+  else if (k === "back") { t.status = "todo"; track(t, w); nowPick = null; }
+  save(); render();
+};
+$("#now").onkeydown = (e) => {
+  if (e.target.id !== "nowPark") return; e.stopPropagation();
+  if (e.key !== "Enter") return; e.preventDefault(); const v = e.target.value.trim(); if (!v) return;
+  const q = parse(v, 2); if (!q.title) return;
+  const t = { id: crypto.randomUUID(), title: q.title, p: q.p, proj: projects[0], tags: [...new Set([...q.tags, "parked"])], wait: q.wait, est: q.est, due: today(), rem: null, done: false, status: "todo", ord: Date.now() };
+  tasks.push(t); sync(t); save(); const f = $("#nowPark"); render(); $("#nowPark")?.focus(); flash("Parked for later.");
+};
