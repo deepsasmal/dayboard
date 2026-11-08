@@ -1243,3 +1243,13 @@ body[data-hide~=side] .side{display:none!important}
 .tlgrid{margin-bottom:170px}
 .dwh b{font-weight:500;color:#fff;letter-spacing:.1em}.dwnav{background:none;border:0;color:var(--ash);font:inherit;font-size:16px;line-height:1;width:24px;height:22px;border-radius:50%;cursor:pointer;transition:all .25s var(--ease);padding:0}.dwnav:hover{background:var(--glass);color:#fff}.dwh>span{gap:4px!important}.dwh small{margin-right:6px}
 .tlnow span{left:-34px!important;min-width:34px;text-align:center}.tlgrid{margin-left:48px}.tlh span{left:-48px}
+.hl .now{max-width:520px;margin:26px 0 0}body.zen .hl .now{max-width:none;margin:5vh auto 0}
+
+/* spacing rhythm (8px scale): sections 32, related groups 24, inside a card 8-16 */
+.hl .quote{margin:32px 0 0;max-width:none}
+.hl .now{margin:24px 0 0;max-width:560px}
+.hl .quote figcaption{margin-top:12px}
+.hr{display:grid;gap:32px;align-content:start}
+.hr>*{margin-block:0!important}.hr>[hidden]{display:none!important}
+.hr .wind .opts{margin-top:16px}.hr .focus h2{margin-bottom:8px}
+.nowact{gap:8px}.nowact .pill.solid{margin-left:0}.nowhint{margin:8px 0 16px}.nowtitle{margin:8px 0 12px}body.zen .nowact{justify-content:center}
