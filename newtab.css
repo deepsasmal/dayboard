@@ -1141,3 +1141,16 @@ i.t::before{background:var(--slate)}i.f::before{background:var(--accent)}
 .cxm.big{max-width:340px}.cxm.big .cxg button{font-size:12.5px}
 .cxy{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px;max-width:380px}
 body.zen .calblock{display:none!important}
+
+/* calendar view: wider, calmer, with a tick for each calendar */
+.calhead,.calbody,.calfilter{width:min(1360px,calc(100% - 8px))}
+.calbody{grid-template-columns:minmax(0,1fr) 320px;gap:28px}
+.calgrid{gap:8px}.calc{min-height:104px;padding:11px 12px;gap:6px}
+.calc .tdots{display:none}.calc .fn small{display:none}
+.calfilter{margin:0 auto 14px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.calfilter[hidden]{display:none}
+.cchip{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 10px;border-radius:9999px;background:var(--glass);border:1px solid var(--line);font-size:12.5px;color:var(--ash);cursor:pointer;transition:all .25s var(--ease)}
+.cchip:hover{color:#fff}.cchip input{appearance:none;width:14px;height:14px;margin:0;border-radius:5px;border:1.5px solid rgba(255,255,255,.4);display:grid;place-items:center;cursor:pointer;transition:all .2s}
+.cchip input:checked{background:#fff;border-color:#fff}.cchip input:checked::after{content:"";width:6px;height:3px;border:solid #0a0a0a;border-width:0 0 1.6px 1.6px;transform:rotate(-45deg) translate(0,-1px)}
+.cchip:has(input:checked){color:#fff}.cchip input:focus-visible{outline:2px solid rgba(232,168,92,.75);outline-offset:2px}
+/* quote: fills the width instead of a narrow column */
+.hl .quote{max-width:none;margin-top:26px}.hl .quote blockquote{font-size:clamp(20px,2.1vw,30px);line-height:1.32;text-wrap:balance}

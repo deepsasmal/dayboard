@@ -2648,7 +2648,8 @@ try { const c = JSON.parse(localStorage["dayboard:mtgs"] || "null"); if (c?.ev) 
 const dkey = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 const lday = (ms) => { const d = new Date(ms); return dkey(d.getFullYear(), d.getMonth(), d.getDate()); };
 const dayStart = (k) => new Date(k + "T00:00").getTime();
-const evOn = (k) => { const a = dayStart(k), b = new Date(a).setDate(new Date(a).getDate() + 1); return mt.ev.filter((e) => e.s < b && (e.e > a || e.s >= a)).sort((x, y) => (y.ad - x.ad) || x.s - y.s); };
+const evs = () => (ol?.list?.some((c) => c.off) ? mt.ev.filter((e) => !ol.list[e.c]?.off) : mt.ev); // events of the calendars that are ticked
+const evOn = (k) => { const a = dayStart(k), b = new Date(a).setDate(new Date(a).getDate() + 1); return evs().filter((e) => e.s < b && (e.e > a || e.s >= a)).sort((x, y) => (y.ad - x.ad) || x.s - y.s); };
 const durText = (e) => { if (e.ad) { const n = Math.max(1, Math.round((e.e - e.s) / 864e5)); return n > 1 ? `${n} days` : "All day"; } const m = Math.round((e.e - e.s) / 6e4); return !m ? "" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`; };
 const inText = (ms) => { const m = Math.max(1, Math.round(ms / 6e4)); return m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${Math.round(m / 1440)} d`; };
 const agoText = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
@@ -2672,7 +2673,7 @@ async function mtRefresh(manual) {
   if (!ol?.url || mtBusy) return; mtBusy = true; $("#calRefresh").classList.add("busy"); if (manual) olSay("Refreshing…");
   const list = ol.list, got = await Promise.all(list.map((c) => mtFetch(c).then((ev) => ({ ev }), (e) => ({ err: e.msg || (e.name === "TimeoutError" ? "Took too long to answer." : "Could not be reached.") }))));
   const errs = got.map((g) => g.err || ""), seen = new Set(), ev = [];
-  got.forEach((g) => (g.ev || []).forEach((e) => { if (!seen.has(e.id)) { seen.add(e.id); ev.push(e); } })); // the same invite in two calendars counts once
+  got.forEach((g, ci) => (g.ev || []).forEach((e) => { e.c = ci; if (!seen.has(e.id)) { seen.add(e.id); ev.push(e); } })); // the same invite in two calendars counts once
   if (got.some((g) => g.ev)) { // keep the last copy only when every calendar failed
     mt = { ev: ev.slice(0, 4000), at: Date.now(), err: "", errs }; try { localStorage["dayboard:mtgs"] = JSON.stringify({ ev: mt.ev, at: mt.at }); } catch {}
     if (errs.some(Boolean)) mt.err = `${errs.filter(Boolean).length} of ${list.length} calendars could not be read.`;
@@ -2711,11 +2712,12 @@ $("#olList").onclick = async (e) => {
 };
 $("#olUrl").oninput = () => ($("#olName").hidden = !ol && !$("#olUrl").value);
 $("#calRefresh").onclick = () => mtRefresh(true);
+$("#calFilter").onchange = (e) => { const i = +e.target.dataset.ci; if (!ol?.list[i]) return; ol.list[i].off = !e.target.checked; store.set({ ol }); drawCal(); renderNextMtg(); mtSchedule(); if (cxMode) cxDraw(); };
 /* the line under the greeting: the next meeting, or how long you are free before it. Free time offers one task that fits. */
 let nm = null, freeSkip = new Set();
 function nextState(now) {
   const eod = new Date().setHours(23, 59, 59, 999), hr = new Date(now).getHours();
-  const L = mt.ev.filter((e) => !e.ad && !e.free && e.e > now && e.s <= eod).sort((x, y) => x.s - y.s), cur = L.find((e) => e.s <= now);
+  const L = evs().filter((e) => !e.ad && !e.free && e.e > now && e.s <= eod).sort((x, y) => x.s - y.s), cur = L.find((e) => e.s <= now);
   if (cur) return { k: "now", e: cur };
   const e = L[0];
   if (e) { const gap = e.s - now; return gap < 10 * 6e4 ? { k: "soon", e } : gap >= 30 * 6e4 && hr >= 8 && hr < 19 ? { k: "free", e, gap } : { k: "next", e }; }
@@ -2782,6 +2784,8 @@ function drawCal() {
   $("#calRefresh").title = mt.err ? `Refresh meetings. Last try failed: ${mt.err}` : mt.at ? `Refresh meetings. Updated ${agoText(mt.at)}.` : "Refresh meetings";
   $("#calRefresh").classList.toggle("bad", !!mt.err);
   const dueOn = {}; open().forEach((t) => { if (t.due) (dueOn[t.due] ||= []).push(t); });
+  const fl = $("#calFilter"), many = (ol?.list?.length || 0) > 1; fl.hidden = !many;
+  fl.innerHTML = many ? ol.list.map((c, i) => `<label class="cchip"><input type="checkbox" data-ci="${i}"${c.off ? "" : " checked"}><span>${esc(c.name || "Calendar " + (i + 1))}</span></label>`).join("") : "";
   if (wk) drawWeek(dueOn); else drawMonth(dueOn);
   drawCalSide(dueOn);
 }
@@ -2970,7 +2974,7 @@ if (EXT) chrome.storage.onChanged.addListener((ch, area) => { // the background 
 });
 function mtSchedule() { // alarms for the next 48 h of meetings, 15 minutes ahead; also the windows other reminders wait out
   if (!EXT || !ol?.url) return;
-  const now = Date.now(), LEAD = 15 * 6e4, ev = mt.ev.filter((e) => !e.ad && !e.free && !e.cancelled && e.e > now && e.s < now + 48 * 36e5).sort((a, b) => a.s - b.s);
+  const now = Date.now(), LEAD = 15 * 6e4, ev = evs().filter((e) => !e.ad && !e.free && !e.cancelled && e.e > now && e.s < now + 48 * 36e5).sort((a, b) => a.s - b.s);
   const next = {}; for (const e of ev) if (e.s - LEAD > now) next[`m:${e.id}:${e.s}`] = { id: e.id, t: (e.t || "Meeting").slice(0, 80), s: e.s, j: /^https:/i.test(e.join || "") ? e.join : "" };
   chrome.storage.local.set({ mnext: next, mwin: ev.map((e) => [e.s, e.e]) });
   chrome.alarms.getAll().then((all) => {
