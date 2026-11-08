@@ -2742,7 +2742,7 @@ async function mtRefresh(manual) {
   } else { mt.errs = errs; mt.err = list.length > 1 ? "None of the calendars could be read. Showing the last copy." : errs[0] + " Showing the last copy."; }
   mtBusy = false; $("#calRefresh").classList.remove("busy"); mtChanged();
 }
-function mtBoot() { if (ol?.url && Date.now() - mt.at > 10 * 6e4) mtRefresh(false); renderNextMtg(); mtSchedule(); }
+function mtBoot() { if (ol?.url && Date.now() - mt.at > 10 * 6e4) mtRefresh(false); renderNextMtg(); mtSchedule(); renderDayW(); }
 setInterval(() => { if (ol?.url) { if (Date.now() - mt.at > 15 * 6e4) mtRefresh(false); renderNextMtg(); } }, 3e4);
 $("#olOn").onclick = async () => {
   let u = $("#olUrl").value.trim().replace(/^webcal:/i, "https:").replace(/\/calendar\.html(\?.*)?$/i, "/calendar.ics"), url;
