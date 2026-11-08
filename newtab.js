@@ -2664,7 +2664,7 @@ function olUI() {
 function mtChanged() { olUI(); renderNextMtg(); mtSchedule(); if (cxMode) cxDraw(); if (!$("#cal").hidden) drawCal(); }
 async function mtFetch(c) { // one calendar: its events, or a short reason
   const r = await fetch(c.url, { cache: "no-store", signal: AbortSignal.timeout(25000) });
-  if (!r.ok) throw { msg: r.status === 404 ? "The link no longer exists. Publish it again and paste the new link." : r.status === 401 || r.status === 403 ? "The link was refused." : `Answered ${r.status}.` };
+  if (!r.ok) throw { msg: r.status === 404 && /calendar\.google\.com/.test(c.url) && /\/public\//.test(c.url) ? "This Google calendar is private. Remove it and add its secret address in iCal format instead (calendar settings, Integrate calendar)." : r.status === 404 ? "The link no longer exists. Publish it again and paste the new link." : r.status === 401 || r.status === 403 ? "The link was refused." : `Answered ${r.status}.` };
   const txt = await r.text(); if (!/BEGIN:VCALENDAR/.test(txt)) throw { msg: "Not a calendar. Use the ICS link, not the HTML one." };
   const t = Date.now(); return ICS.parse(txt, t - 35 * 864e5, t + 200 * 864e5);
 }
@@ -2684,6 +2684,12 @@ setInterval(() => { if (ol?.url) { if (Date.now() - mt.at > 15 * 6e4) mtRefresh(
 $("#olOn").onclick = async () => {
   let u = $("#olUrl").value.trim().replace(/^webcal:/i, "https:").replace(/\/calendar\.html(\?.*)?$/i, "/calendar.ics"), url;
   try { url = new URL(u); } catch { return olSay("That does not look like a link.", true); }
+  if (url.hostname === "calendar.google.com" && !/\/ical\//.test(url.pathname)) { // a Google "add calendar" link: the calendar id is in cid (base64) or src; build its public ICS address
+    let id = url.searchParams.get("src") || ""; const cid = url.searchParams.get("cid");
+    if (cid) { try { id = atob(cid.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(cid.length / 4) * 4, "=")); } catch {} }
+    if (!/^[^\s/]+@[\w.-]+$/.test(id)) return olSay("That Google link has no calendar in it. Use the secret address in iCal format from the calendar's settings.", true);
+    url = new URL(`https://calendar.google.com/calendar/ical/${encodeURIComponent(id)}/public/basic.ics`);
+  }
   if (url.protocol !== "https:" && !/^(localhost|127\.0\.0\.1)$/.test(url.hostname)) return olSay("The link must start with https.", true);
   if (/\.html?$/i.test(url.pathname)) return olSay("That is the web view. Paste the ICS link (it ends in .ics).", true);
   if (globalThis.chrome?.permissions) { // asked first, in the same moment as the click: an await before it would drop the user gesture Chrome requires
