@@ -1986,6 +1986,7 @@ const palCmds = () => [
   ["Year in dots", "time year days dots left progress", "", () => setTimeout(() => openTime("year"), 60)],
   ["Sky: preview sunset", "sunset sky glow evening preview", "", () => setTimeout(() => skyEvent("set"), 120)],
   ["Sky: preview sunrise", "sunrise sky glow morning preview", "", () => setTimeout(() => skyEvent("rise"), 120)],
+  ["Day timeline", "today hours schedule agenda timeline pointer now next", "", () => { cxMode = "day"; cxDraw(); $("#calBlock").scrollIntoView({ block: "center" }); }],
   ["Notifications", "notifications inbox bell alerts reminders heads-up", "", () => setTimeout(() => EXT && bellToggle(true), 60)],
   ["Moon phase", "moon phase lunar full new crescent night moonrise moonset", "", () => setTimeout(() => moonToggle(true), 60)],
   ["Weather", "weather temperature forecast rain sky", "", () => setTimeout(() => wxToggle(true), 60)],
@@ -2920,22 +2921,44 @@ function cxMini(y, m, big) { // one month as a small grid of days; days with som
   for (let d = 1; d <= n; d++) { const k = dkey(y, m, d), it = cxItems(k), has = it.m.length || it.t.length || it.f.length; h += `<button type="button" data-cd="${k}" class="${k === tk ? "today " : ""}${has ? "has" : ""}" aria-label="${esc(dayLabel(k))}">${d}</button>`; }
   return h + "</div></div>";
 }
+/* the day as a timeline: hours down the side, meetings as blocks, a pointer for now, and what comes next */
+const TLH = 46; // px per hour
+function dayTL(k, now) {
+  const a = dayStart(k), z = a + 864e5, nowMs = now.getTime(), isToday = k === today();
+  const all = ol?.url ? evOn(k) : [], ad = all.filter((e) => e.ad), ev = all.filter((e) => !e.ad && !e.free && !e.cancelled).map((e) => ({ ...e, s: Math.max(e.s, a), e: Math.min(e.e, z) })).sort((x, y) => x.s - y.s || y.e - x.e);
+  let h0 = 7, h1 = 20; ev.forEach((e) => { h0 = Math.min(h0, Math.floor((e.s - a) / 36e5)); h1 = Math.max(h1, Math.ceil((e.e - a) / 36e5)); }); h0 = Math.max(0, h0); h1 = Math.min(24, h1);
+  const top = (ms) => ((ms - a) / 36e5 - h0) * TLH;
+  let cl = [], end = 0; // overlapping meetings share the width
+  ev.forEach((e) => { if (e.s >= end) { cl.forEach((x) => (x.n = cl.length)); cl = []; } let c = 0; while (cl.some((x) => x.col === c && x.e > e.s)) c++; e.col = c; cl.push(e); end = Math.max(end, e.e); }); cl.forEach((x) => (x.n = cl.length));
+  const cur = ev.find((e) => e.s <= nowMs && e.e > nowMs), nxt = isToday ? ev.find((e) => e.s > nowMs) : ev[0];
+  const head = !all.length && !ol?.url ? "Connect a calendar in Settings to see meetings here." : cur ? `Now · ${esc(cur.t)} · until ${hhmm(cur.e)}` : nxt ? `${isToday ? "Next" : "First"} · ${esc(nxt.t)} · ${isToday ? "in " + inText(nxt.s - nowMs) : hhmm(nxt.s)}` : "Nothing more scheduled. A clear stretch.";
+  let rows = ""; for (let hr = h0; hr < h1; hr++) rows += `<div class="tlh" style="top:${(hr - h0) * TLH}px"><span>${prefs.clock === "12" ? ((hr + 11) % 12 + 1) + (hr < 12 ? "a" : "p") : String(hr).padStart(2, "0")}</span></div>`;
+  const blocks = ev.map((e) => { const t = top(e.s), ht = Math.max(22, top(e.e) - t - 2), w = 100 / e.n;
+    return `<button type="button" class="tle${e.tent ? " tent" : ""}${e === cur ? " cur" : e === nxt ? " nxt" : ""}${isToday && e.e <= nowMs ? " past" : ""}" data-cd="${k}" data-ev="${esc(e.id)}" style="top:${t}px;height:${ht}px;left:calc(${e.col * w}% + 1px);width:calc(${w}% - 3px)"><b>${esc(e.t)}</b>${ht > 34 ? `<small>${hhmm(e.s)} – ${hhmm(e.e)}</small>` : ""}</button>`; }).join("");
+  const ptr = isToday && nowMs >= a + h0 * 36e5 && nowMs < a + h1 * 36e5 ? `<div class="tlnow" style="top:${top(nowMs)}px"><span>${hhmm(nowMs)}</span></div>` : "";
+  const tk = open().filter((x) => x.due === k && !x.wait).slice(0, 4), f = fest[k] || [];
+  return `<div class="tl"><p class="tlhead${cur ? " live" : ""}">${head}</p>${ad.length || f.length ? `<p class="tlad">${[...f.map((x) => x[0]), ...ad.map((e) => e.t)].slice(0, 3).map((x) => `<i>${esc(x)}</i>`).join("")}</p>` : ""}
+    <div class="tlscroll" data-now="${isToday ? Math.max(0, top(nowMs) - TLH * 1.5) : Math.max(0, (ev[0] ? top(ev[0].s) : 2 * TLH) - TLH)}"><div class="tlgrid" style="height:${(h1 - h0) * TLH}px">${rows}${blocks}${ptr}</div></div>
+    ${tk.length ? `<p class="tltasks">${tk.map((x) => `<i>${esc(x.title.slice(0, 30))}</i>`).join("")}</p>` : ""}</div>`;
+}
 function cxDraw() {
   $("#calx").classList.toggle("open", !!cxMode); document.querySelectorAll("#calSeg [data-m]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === cxMode));
   if (!cxMode) return; const now = new Date(), tk = today(), box = $("#calxi"); let h = "";
-  if (cxMode === "day") { const l = cxLine(tk); h = `<ul class="cxl">${l.length ? l.map((x) => `<li>${x}</li>`).join("") : `<li class="none">Nothing scheduled. A clear day.</li>`}</ul>`; }
+  if (cxMode === "day") h = dayTL(tk, now);
   else if (cxMode === "week") {
     const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
     h = `<ul class="cxw">${Array.from({ length: 7 }, (_, i) => { const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i), k = dkey(d.getFullYear(), d.getMonth(), d.getDate()), l = cxLine(k);
       return `<li class="${k === tk ? "today" : ""}" data-cd="${k}"><b>${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}</b><span>${l.length ? l.slice(0, 3).join("") + (l.length > 3 ? `<em>+${l.length - 3}</em>` : "") : `<i class="none">Free</i>`}</span></li>`; }).join("")}</ul>`;
   } else if (cxMode === "month") { const d = new Date(now.getFullYear(), now.getMonth() + cxOff, 1); h = `<div class="cxnav"><button type="button" data-cn="-1" aria-label="Previous month">‹</button><button type="button" data-cn="0" class="cxnow">Today</button><button type="button" data-cn="1" aria-label="Next month">›</button></div>` + cxMini(d.getFullYear(), d.getMonth(), true); }
   else h = `<div class="cxy">${Array.from({ length: 12 }, (_, m) => cxMini(now.getFullYear(), m, false)).join("")}</div>`;
-  box.innerHTML = h;
+  const old = box.querySelector(".tlscroll")?.scrollTop; box.innerHTML = h;
+  const sc = box.querySelector(".tlscroll"); if (sc) sc.scrollTop = old ?? +sc.dataset.now;
 }
 addEventListener("keydown", (e) => { if (e.key === "Escape" && cxMode && !typingNow() && !zenOpen() && $("#settings").hidden && $("#menu").hidden) { cxMode = ""; cxDraw(); } });
 $("#calSeg").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; cxMode = cxMode === b.dataset.m ? "" : b.dataset.m; cxOff = 0; cxDraw(); };
 $("#calx").onclick = (e) => {
   const n = e.target.closest("[data-cn]"); if (n) { cxOff = n.dataset.cn === "0" ? 0 : cxOff + +n.dataset.cn; return cxDraw(); }
+  const ev = e.target.closest("[data-ev]"); if (ev) return openCal(ev.dataset.cd, ev.dataset.ev);
   const d = e.target.closest("[data-cd]"); if (d) openCal(d.dataset.cd);
 };
 $("#weekRow").onclick = () => openCal(); $("#weekRow").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCal(); } };
@@ -3067,3 +3090,4 @@ $("#now").onkeydown = (e) => {
   const t = { id: crypto.randomUUID(), title: q.title, p: q.p, proj: projects[0], tags: [...new Set([...q.tags, "parked"])], wait: q.wait, est: q.est, due: today(), rem: null, done: false, status: "todo", ord: Date.now() };
   tasks.push(t); sync(t); save(); const f = $("#nowPark"); render(); $("#nowPark")?.focus(); flash("Parked for later.");
 };
+setInterval(live(() => { if (cxMode === "day") cxDraw(); }), 6e4); // moves the pointer
