@@ -1294,3 +1294,10 @@ body.zen .mcol{display:none}
 .carechip{padding:6px 11px;background:none!important;backdrop-filter:none!important}.carechip small{color:var(--slate);font-size:11px}
 .rhythm{display:block;width:100%;height:auto}.rhythm .rl{stroke:rgba(255,255,255,.14);stroke-width:1}.rhythm .rn{stroke:var(--accent);stroke-width:1.5}.rhythm .cw{fill:#bcd2ff}.rhythm .cst{fill:none;stroke:#fff;stroke-width:1.5}.rhythm .cs{stroke:var(--slate);stroke-width:1.4;stroke-linecap:round;fill:none}
 .carecap{font-size:11.5px;color:var(--slate);line-height:1.3}
+
+.cstep{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--ash);font:inherit;font-size:14px;line-height:1;padding:0;cursor:pointer;display:grid;place-items:center;flex:none;transition:all .2s var(--ease)}
+.cstep:hover:not(:disabled){color:#fff;border-color:rgba(255,255,255,.5)}.cstep:active:not(:disabled){transform:scale(.88)}.cstep:disabled{opacity:.3;cursor:default}
+.carewater{cursor:default}.carechip{cursor:default}.carechip:hover{color:var(--ash);border-color:var(--line)}
+.carechip{gap:7px}
+.sub .carew{margin-top:22px;width:min(340px,100%)}.timerow .mcol{gap:0}body.zen .carew{display:none!important}
+.timerow>.carew{grid-column:1;grid-row:3;margin-top:18px;width:340px;max-width:100%}@media(max-width:760px){.timerow>.carew{grid-row:auto}}

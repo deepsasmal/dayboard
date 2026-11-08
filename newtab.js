@@ -1431,7 +1431,7 @@ const glassK = (v) => (v <= 50 ? 1 + (50 - v) / 50 * .6 : 1 - (v - 50) / 50 * .7
 /* widgets: each can be switched off; the choice is a list of names on <body> that the stylesheet hides */
 const WIDGETS = [
   ["week", "Week strip", "The days of this week, with the Day, Week, Month, Year picker."], ["sun", "Sun and moon arc", "Sunrise, sunset and the moon's phase."],
-  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""], ["wxw", "Weather strip", "The next 12 hours, with rain."], ["carew", "Water, stretch and breath", "Quiet ticks and a one-minute breath."],
+  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""], ["carew", "Water, stretch and breath", "Quiet ticks and a one-minute breath."],
   ["dayw", "Day timeline", "Today by the hour, with a pointer for now and your meetings."], ["rings", "Time rings", "Day, week, month and year progress."],
   ["wind", "Winding down", "The evening note with Wrap up the day."], ["focus", "What matters today", "Up to three pinned tasks."],
   ["nextmtg", "Next meeting line", "Under the greeting. Needs a calendar."], ["wx", "Weather chip", "The temperature beside the date."],
@@ -2233,7 +2233,7 @@ function wxToggle(on = $("#wxPop").hidden) { if (on) drawWx(); $("#wxPop").hidde
 $("#wxChip").onclick = (e) => { e.stopPropagation(); wxToggle(); };
 document.addEventListener("click", (e) => { if (!$("#wxPop").hidden && !e.target.closest("#wxPop, #wxChip")) wxToggle(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#wxPop").hidden) { wxToggle(false); $("#wxChip").focus(); } });
-const wxApply = () => { wxStart(); renderWx(); renderWxw(); };
+const wxApply = () => { wxStart(); renderWx(); };
 async function wxFetch() {
   const P = place(); let stale = null;
   try { const c = JSON.parse(localStorage["dayboard:wx"]); if (c.v === 3 && c.city === P.name) { stale = c; if (Date.now() - c.t < 18e5) { wxData = c; return wxApply(); } } } catch {}
@@ -3140,20 +3140,6 @@ setInterval(live(() => { // the pointer itself glides every few seconds, without
   document.querySelectorAll(".tlnow").forEach((p) => { p.style.top = ((n - dayStart(ptrDay)) / 36e5) * TLH + "px"; p.firstChild.textContent = hhmm(n); });
 }), 5000);
 
-/* ---------- weather strip: the next 12 hours, with rain as small bars ---------- */
-function renderWxw() {
-  const box = $("#wxw"), H = (wxData?.hours || []).slice(0, 13); if (H.length < 6) { box.hidden = true; return; } box.hidden = false;
-  const Ts = H.map((h) => h.T), lo = Math.min(...Ts), hi = Math.max(...Ts), sx = (i) => 8 + (i * 234) / (H.length - 1), sy = (t) => 10 + (hi === lo ? 14 : ((hi - t) / (hi - lo)) * 28);
-  const line = H.map((h, i) => `${i ? "L" : "M"}${sx(i).toFixed(1)} ${sy(h.T).toFixed(1)}`).join("");
-  const bars = H.map((h, i) => (h.p >= 20 ? `<rect x="${(sx(i) - 3.5).toFixed(1)}" y="${(70 - (h.p / 100) * 24).toFixed(1)}" width="7" height="${((h.p / 100) * 24).toFixed(1)}" rx="2" opacity="${(0.25 + h.p / 160).toFixed(2)}"/>` : "")).join("");
-  const at = (t) => { const [hh, mm] = t.slice(11, 16).split(":"); return prefs.clock === "12" ? `${(+hh + 11) % 12 + 1}${+hh < 12 ? "am" : "pm"}` : `${hh}:${mm}`; };
-  const wet = H.findIndex((h, i) => i > 0 && h.p >= 50), maxP = Math.max(...H.map((h) => h.p));
-  const note = H[0].p >= 50 ? "Rain now" : wet > 0 ? `Rain around ${at(H[wet].t)}` : maxP >= 30 ? "A chance of rain" : "Dry";
-  box.innerHTML = `<div class="wxh"><span>Next 12 hours</span><b>${deg(lo)} – ${deg(hi)}</b></div>
-    <svg viewBox="0 0 250 74" role="img" aria-label="Temperature and rain, next 12 hours"><g class="wxbars">${bars}</g><path class="wxline" d="${line}" fill="none"/><circle class="wxdot" cx="${sx(0)}" cy="${sy(H[0].T).toFixed(1)}" r="3.5"/></svg>
-    <div class="wxf"><span>Now</span><b class="${wet > 0 || H[0].p >= 50 ? "wet" : ""}">${note}</b><span>+12h</span></div>`;
-}
-
 /* ---------- care: water, stretch and a breath, all quiet ---------- */
 const careToday = () => { if (care.d !== today()) care = { ...care, d: today(), w: 0, s: 0 }; return care; };
 const CGOAL = 8, CFROM = 9, CTO = 19;
@@ -3173,16 +3159,21 @@ function careDraw() {
   const cap = days > 1 ? `Last 7 days · ${(wDone / days).toFixed(1)} glasses a day${skipped ? ` · ${skipped} skipped` : ""}` : now < at(CFROM) ? "The day has not started" : now >= at(CTO) ? "Done for the day" : behind >= 1 ? `${behind} glass${behind > 1 ? "es" : ""} behind the pace` : "On pace";
   $("#carew").innerHTML = `<div class="carecard">
     <div class="careh"><span>Care</span><small>${esc(w >= CGOAL ? "Goal reached" : behind >= 1 && now >= at(CFROM) && now < at(CTO) ? `${behind} behind` : "On pace")}</small></div>
-    <button type="button" class="carewater" data-c="water" title="Log a glass of water">${svgI("water")}<span class="pips" aria-hidden="true">${Array.from({ length: CGOAL }, (_, i) => `<i class="${i < w ? "on" : ""}${i === Math.round(pace) - 1 && w < CGOAL ? " pace" : ""}"></i>`).join("")}</span><b>${w}/${CGOAL}</b></button>
-    <div class="carerow"><button type="button" class="carechip" data-c="stretch" title="Log a stretch">${svgI("stretch")}<span>Stretch</span><b>${c.s || 0}</b><small>${ago}</small></button>
+    <div class="carewater">${svgI("water")}<button type="button" class="cstep" data-c="water-" aria-label="Remove a glass" title="Remove the last glass"${w ? "" : " disabled"}>−</button><span class="pips" aria-hidden="true">${Array.from({ length: CGOAL }, (_, i) => `<i class="${i < w ? "on" : ""}${i === Math.round(pace) - 1 && w < CGOAL ? " pace" : ""}"></i>`).join("")}</span><button type="button" class="cstep" data-c="water" aria-label="Add a glass" title="Log a glass of water">+</button><b>${w}/${CGOAL}</b></div>
+    <div class="carerow"><div class="carechip">${svgI("stretch")}<span>Stretch</span><button type="button" class="cstep" data-c="stretch-" aria-label="Remove a stretch" title="Remove the last stretch"${c.s ? "" : " disabled"}>−</button><b>${c.s || 0}</b><button type="button" class="cstep" data-c="stretch" aria-label="Add a stretch" title="Log a stretch">+</button><small>${ago}</small></div>
     <button type="button" class="orbbtn" data-c="breath" aria-label="One-minute breath" title="One minute of breathing  (B)"><i></i></button></div>
     <svg class="rhythm" viewBox="0 0 250 22" role="img" aria-label="Today's water and stretches"><line x1="8" y1="11" x2="242" y2="11" class="rl"/>${(now > X0 && now < X1) ? `<line x1="${x(now)}" x2="${x(now)}" y1="3" y2="19" class="rn"/>` : ""}${dots}</svg>
     <p class="carecap">${esc(cap)}</p></div>`;
 }
 $("#carew").onclick = (e) => {
-  const b = e.target.closest("[data-c]"); if (!b) return; const k = b.dataset.c;
+  const b = e.target.closest("[data-c]"); if (!b || b.disabled) return; let k = b.dataset.c;
   if (k === "breath") return openBreath();
-  const c = careToday(); if (k === "water") { c.w = (c.w || 0) + 1; c.lw = Date.now(); careLog("water", "done"); } else { c.s = (c.s || 0) + 1; c.ls = Date.now(); careLog("stretch", "done"); }
-  c.k = { ...(c.k || {}), [k === "water" ? "w" : "s"]: 0 }; care = { ...c }; store.set({ care }); careDraw(); b.blur?.();
+  const c = careToday(), minus = k.endsWith("-"); k = k.replace("-", "");
+  if (minus) { // a mistaken tap: take the last one back, and its log entry with it
+    const key = k === "water" ? "w" : "s", L = c.log || [], i = L.map((x, j) => (x.k === k && x.r !== "skip" && lday(x.t) === today() ? j : -1)).filter((j) => j >= 0).pop();
+    c[key] = Math.max(0, (c[key] || 0) - 1); if (i !== undefined) c.log = L.filter((_, j) => j !== i);
+    const prev = (c.log || []).filter((x) => x.k === k && x.r !== "skip").pop(); c[k === "water" ? "lw" : "ls"] = prev ? prev.t : 0;
+  } else { if (k === "water") { c.w = (c.w || 0) + 1; c.lw = Date.now(); } else { c.s = (c.s || 0) + 1; c.ls = Date.now(); } careLog(k, "done"); c.k = { ...(c.k || {}), [k === "water" ? "w" : "s"]: 0 }; }
+  care = { ...c }; store.set({ care }); careDraw(); b.blur?.();
 };
 setInterval(live(careDraw), 6e4);
