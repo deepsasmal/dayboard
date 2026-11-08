@@ -3,6 +3,7 @@ const $ = (s) => document.querySelector(s);
 const live = (f) => () => { if (!document.hidden) f(); };
 const typingNow = () => /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || document.activeElement.isContentEditable; // the note page is a contenteditable
 const applyPaintHide = () => { const f = $("#paintFig"); if (!f) return; f.classList.toggle("off", !!prefs.paintHide); $("#paintBtn").tabIndex = prefs.paintHide ? -1 : 0; try { localStorage["dayboard:ph"] = prefs.paintHide ? "1" : ""; } catch {} };
+try { document.body.dataset.hide = localStorage["dayboard:hide"] || ""; } catch {}
 try { document.body.dataset.clock = localStorage["dayboard:cs"] || "solid"; document.documentElement.style.setProperty("--gt", localStorage["dayboard:gt"] || "1"); } catch {} // no flash of the wrong clock style or glass // no flash of the wrong clock style
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
@@ -1419,14 +1420,36 @@ const ago = (ms) => { const d = Math.floor((Date.now() - ms) / 864e5); return d 
 $("#prefCity").innerHTML = CITIES.map((c) => `<option>${esc(c.name)}</option>`).join("");
 /* glass: 0 = solid .. 50 = as designed .. 100 = nearly clear; every panel's fill is multiplied by --gt */
 const glassK = (v) => (v <= 50 ? 1 + (50 - v) / 50 * .6 : 1 - (v - 50) / 50 * .72);
+/* widgets: each can be switched off; the choice is a list of names on <body> that the stylesheet hides */
+const WIDGETS = [
+  ["week", "Week strip", "The days of this week, with the Day, Week, Month, Year picker."], ["sun", "Sun and moon arc", "Sunrise, sunset and the moon's phase."],
+  ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""],
+  ["dayw", "Day timeline", "Today's meetings by the hour, with a pointer for now. Needs a calendar."], ["rings", "Time rings", "Day, week, month and year progress."],
+  ["wind", "Winding down", "The evening note with Wrap up the day."], ["focus", "What matters today", "Up to three pinned tasks."],
+  ["nextmtg", "Next meeting line", "Under the greeting. Needs a calendar."], ["wx", "Weather chip", "The temperature beside the date."],
+  ["dock", "Quick navigation strip", "Below the task board."], ["side", "Side panel", "Counts and projects."], ["bell", "Notification bell", ""],
+];
+const wgOn = (k) => (k === "rings" ? prefs.rings !== "off" : k === "dayw" ? prefs.dayw !== "off" : k === "paint" ? !prefs.paintHide : !(prefs.hide || []).includes(k));
+function applyHide() { const v = (prefs.hide || []).join(" "); document.body.dataset.hide = v; try { localStorage["dayboard:hide"] = v; } catch {} }
+function wgDraw() {
+  $("#wgList").innerHTML = WIDGETS.filter(([k]) => (k === "dayw" || k === "nextmtg" ? HAS_OL : k === "bell" ? EXT : true)).map(([k, n, d]) => `<div class="prefrow"><span class="pl">${n}${d ? `<em>${d}</em>` : ""}</span><span class="seg" data-w="${k}" role="group" aria-label="${n}"><button data-v="on" aria-pressed="${wgOn(k)}">On</button><button data-v="off" aria-pressed="${!wgOn(k)}">Off</button></span></div>`).join("");
+}
+$("#wgList").onclick = (e) => {
+  const b = e.target.closest("[data-v]"), k = b?.parentNode.dataset.w; if (!k) return; const on = b.dataset.v === "on";
+  if (k === "rings") { prefs.rings = on ? "on" : "off"; renderRings(); } else if (k === "dayw") { prefs.dayw = on ? "on" : "off"; renderDayW(); }
+  else if (k === "paint") { prefs.paintHide = !on; applyPaintHide(); }
+  else { const h = new Set(prefs.hide || []); on ? h.delete(k) : h.add(k); prefs.hide = [...h]; applyHide(); }
+  save(); wgDraw();
+};
 function applyGlass() { const k = glassK(Number.isFinite(prefs.glass) ? prefs.glass : 50).toFixed(3); document.documentElement.style.setProperty("--gt", k); try { localStorage["dayboard:gt"] = k; } catch {} }
 $("#prefGlass").oninput = (e) => { prefs.glass = +e.target.value; applyGlass(); };
 $("#prefGlass").onchange = () => save();
 function syncPrefsUI() {
+  applyHide(); wgDraw();
   $("#prefCity").value = place().name; $("#prefGlass").value = Number.isFinite(prefs.glass) ? prefs.glass : 50; applyGlass();
   applyPaintHide();
   document.body.dataset.clock = prefs.clockStyle || "solid"; try { localStorage["dayboard:cs"] = prefs.clockStyle || "solid"; } catch {}
-  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"], ["prefRings", "rings"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
+  for (const [id, key] of [["prefClock", "clock"], ["prefArt", "art"], ["wpArt", "art"], ["prefWx", "wx"], ["prefGolden", "golden"], ["prefChime", "chime"], ["prefHeads", "heads"], ["prefClockStyle", "clockStyle"], ["prefOpenDay", "openDay"], ["prefFresh", "fresh"]]) document.querySelectorAll(`#${id} [data-v]`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === prefs[key]));
   $("#backupInfo").textContent = prefs.lastBackup ? `Last backup: ${ago(prefs.lastBackup)}.` : "No backup yet.";
 }
 $("#prefCity").onchange = (e) => { prefs.city = e.target.value; save(); renderSun(); syncPrefsUI(); wxFetch(); };
@@ -1434,7 +1457,6 @@ $("#prefGolden").onclick = (e) => { const b = e.target.closest("[data-v]"); if (
 $("#prefChime").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.chime = b.dataset.v; save(); syncPrefsUI(); if (prefs.chime === "on") chime(); };
 $("#prefHeads").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.heads = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefClockStyle").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.clockStyle = b.dataset.v; save(); syncPrefsUI(); };
-$("#prefRings").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.rings = b.dataset.v; save(); syncPrefsUI(); renderRings(); };
 $("#prefFresh").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.fresh = b.dataset.v; save(); syncPrefsUI(); if (prefs.fresh === "on") libFetch().catch(() => {}); };
 $("#prefOpenDay").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.openDay = b.dataset.v; save(); syncPrefsUI(); };
 $("#prefWx").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; prefs.wx = b.dataset.v; save(); syncPrefsUI(); wxStart(); };
@@ -2702,7 +2724,7 @@ function olUI() {
   $("#olList").innerHTML = (ol?.list || []).map((c, i) => `<li><span>${esc(c.name || "Calendar " + (i + 1))}${mt.errs?.[i] ? ` <small class="w">${esc(mt.errs[i])}</small>` : ""}</span><button type="button" class="pill" data-olx="${i}">Remove</button></li>`).join("");
   if (ol) olSay(mt.err ? `Last refresh failed: ${mt.err}` : mt.at ? `${mt.ev.length} events from ${ol.list.length} calendar${ol.list.length > 1 ? "s" : ""}. Updated ${agoText(mt.at)}.` : "Connected. Reading your calendar…", !!mt.err); else olSay("");
 }
-function mtChanged() { olUI(); renderNextMtg(); mtSchedule(); if (cxMode) cxDraw(); if (!$("#cal").hidden) drawCal(); }
+function mtChanged() { olUI(); renderNextMtg(); mtSchedule(); renderDayW(); if (cxMode) cxDraw(); if (!$("#cal").hidden) drawCal(); }
 async function mtFetch(c) { // one calendar: its events, or a short reason
   const r = await fetch(c.url, { cache: "no-store", signal: AbortSignal.timeout(25000) });
   if (!r.ok) throw { msg: r.status === 404 && /calendar\.google\.com/.test(c.url) && /\/public\//.test(c.url) ? "This Google calendar is private. Remove it and add its secret address in iCal format instead (calendar settings, Integrate calendar)." : r.status === 404 ? "The link no longer exists. Publish it again and paste the new link." : r.status === 401 || r.status === 403 ? "The link was refused." : `Answered ${r.status}.` };
@@ -2988,7 +3010,7 @@ function openBreath() {
 $("#breathX").onclick = closeBreath;
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingNow() && !zenOpen()) { e.preventDefault(); openBreath(); } });
 
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); renderRings(); renderWind(); renderNudge(); renderNextMtg(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { renderDayW(); tick(); renderRings(); renderWind(); renderNudge(); renderNextMtg(); } });
 
 /* ---------- notifications: a bell with the last two weeks of nudges, meeting heads-ups and tidy-ups, and a soft chime ---------- */
 const EXT = !!globalThis.chrome?.runtime?.id;
@@ -3090,4 +3112,10 @@ $("#now").onkeydown = (e) => {
   const t = { id: crypto.randomUUID(), title: q.title, p: q.p, proj: projects[0], tags: [...new Set([...q.tags, "parked"])], wait: q.wait, est: q.est, due: today(), rem: null, done: false, status: "todo", ord: Date.now() };
   tasks.push(t); sync(t); save(); const f = $("#nowPark"); render(); $("#nowPark")?.focus(); flash("Parked for later.");
 };
-setInterval(live(() => { if (cxMode === "day") cxDraw(); }), 6e4); // moves the pointer
+function renderDayW() { // the always-on widget: the same timeline, in its own place beside the greeting
+  const box = $("#dayw"), on = HAS_OL && ol?.url && prefs.dayw !== "off"; box.hidden = !on; if (!on) { box.innerHTML = ""; return; }
+  const old = box.querySelector(".tlscroll")?.scrollTop; box.innerHTML = `<h3 class="dwh">Today<small>${new Date().toLocaleDateString(undefined, { weekday: "long" })}</small></h3>` + dayTL(today(), new Date());
+  const sc = box.querySelector(".tlscroll"); if (sc) sc.scrollTop = old ?? +sc.dataset.now;
+}
+$("#dayw").onclick = (e) => { const ev = e.target.closest("[data-ev]"); if (ev) openCal(ev.dataset.cd, ev.dataset.ev); };
+setInterval(live(() => { if (cxMode === "day") cxDraw(); renderDayW(); }), 6e4); // moves the pointer

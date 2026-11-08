@@ -60,7 +60,7 @@
 <div id="settings" class="settings sset" hidden role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
   <aside class="snav"><p class="stitle">Settings</p>
     <nav id="setNav" aria-label="Settings sections">
-      <button type="button" data-t="general">General</button><button type="button" data-t="appearance">Appearance</button><button type="button" data-t="notify">Notifications</button><button type="button" id="olTab" data-t="cal" hidden>Calendars</button><button type="button" data-t="data">Backup &amp; recovery</button><button type="button" data-t="more">More</button>
+      <button type="button" data-t="general">General</button><button type="button" data-t="appearance">Appearance</button><button type="button" data-t="widgets">Widgets</button><button type="button" data-t="notify">Notifications</button><button type="button" id="olTab" data-t="cal" hidden>Calendars</button><button type="button" data-t="data">Backup &amp; recovery</button><button type="button" data-t="more">More</button>
     </nav>
   </aside>
   <div class="sbody"><button type="button" id="setX" class="sortx setx" aria-label="Close settings" title="Close (Esc)">×</button>
@@ -74,8 +74,10 @@
   <div class="prefrow glassrow"><span class="pl">Glass transparency<em>How see-through the frosted panels are.</em></span><span class="glassctl"><small>Solid</small><input type="range" id="prefGlass" min="0" max="100" step="5" aria-label="Glass transparency: solid to clear"><small>Clear</small></span></div>
   <div class="prefrow"><span class="pl">Background<em>Where the wallpaper pictures come from.</em></span><span class="seg" id="prefArt" role="group" aria-label="Background"><button data-v="paintings">Art</button><button data-v="photos">Nature</button><button data-v="both">Art + Nature</button></span></div>
   <div class="prefrow"><span class="pl">Fresh paintings each week<em>Adds new paintings from the museum each week.</em></span><span class="seg" id="prefFresh" role="group" aria-label="Fresh paintings each week"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span class="pl">Time rings on the main page<em>Day, week, month and year progress.</em></span><span class="seg" id="prefRings" role="group" aria-label="Time rings"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
   <div class="prefrow"><span class="pl">Weather on the background<em>Rain, snow and clouds drifting over the picture.</em></span><span class="seg" id="prefWx" role="group" aria-label="Weather on the background"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  </section>
+  <section class="spg" data-pg="widgets" hidden><header><h2>Widgets</h2><p>Show only what you want on the main page.</p></header>
+  <div id="wgList"></div>
   </section>
   <section class="spg" data-pg="notify" hidden><header><h2>Notifications</h2><p>What is allowed to reach you.</p></header>
   <div class="prefrow"><span class="pl">Meeting heads-up (15 min)<em>A quiet note before each meeting. Reminders wait until it ends.</em></span><span class="seg" id="prefHeads" role="group" aria-label="Meeting heads-up"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
@@ -182,6 +184,7 @@
       <figcaption id="paintCap"></figcaption>
       <button type="button" id="paintShow" class="pshow" aria-label="Show the painting">Show painting</button>
     </figure>
+    <section id="dayw" class="dayw" hidden aria-label="Today's schedule"></section>
     <figure class="quote">
       <blockquote id="quote"></blockquote>
       <figcaption id="author"></figcaption>
