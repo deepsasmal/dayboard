@@ -3112,13 +3112,20 @@ $("#now").onkeydown = (e) => {
   const t = { id: crypto.randomUUID(), title: q.title, p: q.p, proj: projects[0], tags: [...new Set([...q.tags, "parked"])], wait: q.wait, est: q.est, due: today(), rem: null, done: false, status: "todo", ord: Date.now() };
   tasks.push(t); sync(t); save(); const f = $("#nowPark"); render(); $("#nowPark")?.focus(); flash("Parked for later.");
 };
+let dwOff = 0; // days away from today
 function renderDayW() { // the always-on widget: the same timeline, in its own place beside the greeting
   const box = $("#dayw"), on = prefs.dayw !== "off"; box.hidden = !on; if (!on) { box.innerHTML = ""; return; }
-  const old = box.querySelector(".tlscroll")?.scrollTop; box.innerHTML = `<h3 class="dwh">Today<span><button type="button" id="dwNow" class="dwnow" title="Back to now">Now</button><small>${new Date().toLocaleDateString(undefined, { weekday: "long" })}</small></span></h3>` + dayTL(today(), new Date());
+  const old = box.querySelector(".tlscroll")?.scrollTop; const k = plus(today(), dwOff); box.innerHTML = `<h3 class="dwh">${dwOff ? `<b>${esc(new Date(k + "T00:00").toLocaleDateString(undefined, { weekday: "long" }))}</b>` : "Today"}<span><small>${esc(new Date(k + "T00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</small><button type="button" class="dwnav" data-dn="-1" aria-label="Previous day">‹</button><button type="button" id="dwNow" class="dwnow" title="${dwOff ? "Back to today" : "Back to now"}">${dwOff ? "Today" : "Now"}</button><button type="button" class="dwnav" data-dn="1" aria-label="Next day">›</button></span></h3>` + dayTL(k, new Date());
   const sc = box.querySelector(".tlscroll"), v = dwTouched && old != null ? old : sc ? +sc.dataset.now : 0; // follows the pointer until you scroll it yourself
   if (sc) { sc.scrollTop = v; requestAnimationFrame(() => (sc.scrollTop = v)); }
 }
 let dwTouched = false; $("#dayw").addEventListener("wheel", () => (dwTouched = true), { passive: true }); $("#dayw").addEventListener("touchmove", () => (dwTouched = true), { passive: true });
 $("#dayw").onclick = (e) => {
-  if (e.target.closest("#dwNow")) { dwTouched = false; const sc = $("#dayw .tlscroll"); if (sc) sc.scrollTo({ top: +sc.dataset.now, behavior: "smooth" }); return; } const ev = e.target.closest("[data-ev]"); if (ev) openCal(ev.dataset.cd, ev.dataset.ev); };
-setInterval(live(() => { if (cxMode === "day") cxDraw(); renderDayW(); }), 6e4); // moves the pointer
+  const dn = e.target.closest("[data-dn]"); if (dn) { dwOff += +dn.dataset.dn; dwTouched = false; return renderDayW(); }
+  if (e.target.closest("#dwNow")) { if (dwOff) { dwOff = 0; dwTouched = false; return renderDayW(); } dwTouched = false; const sc = $("#dayw .tlscroll"); if (sc) sc.scrollTo({ top: +sc.dataset.now, behavior: "smooth" }); return; } const ev = e.target.closest("[data-ev]"); if (ev) openCal(ev.dataset.cd, ev.dataset.ev); };
+setInterval(live(() => { if (cxMode === "day") cxDraw(); renderDayW(); }), 6e4); // refreshes now / next / past states
+let ptrDay = today();
+setInterval(live(() => { // the pointer itself glides every few seconds, without redrawing anything
+  const n = Date.now(); if (today() !== ptrDay) { ptrDay = today(); dwOff = 0; renderDayW(); if (cxMode === "day") cxDraw(); return; }
+  document.querySelectorAll(".tlnow").forEach((p) => { p.style.top = ((n - dayStart(ptrDay)) / 36e5) * TLH + "px"; p.firstChild.textContent = hhmm(n); });
+}), 5000);
