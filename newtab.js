@@ -8,13 +8,16 @@ const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">
 const iso = (d) => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 
 /* ---------- storage (chrome.storage, localStorage fallback for plain-file preview) ---------- */
+const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x)); // key order differs after a round trip through Chrome
 const store = {
   async get() {
     if (globalThis.chrome?.storage) return chrome.storage.local.get(["tasks", "projects", "notes", "saved", "links", "active", "sview", "dockSeeded", "prefs", "paint", "trash", "snaps", "meeting", "hook", "ol", "archive", "inbox"]);
     return JSON.parse(localStorage.dayboard || "{}");
   },
+  mine: {}, // what this page itself wrote, by key (last few versions). Chrome echoes our own writes back as "changes", sometimes after we have already edited again; applying that echo would roll newer work back.
   set(o) {
-    if (globalThis.chrome?.storage) return chrome.storage.local.set(o);
+    for (const k in o) { const L = (this.mine[k] ||= []); try { L.push(canon(o[k])); } catch {} if (L.length > 12) L.shift(); }
+    if (globalThis.chrome?.storage) return chrome.storage.local.set(o).catch((e) => { try { alert("Dayboard could not save: " + (e?.message || e) + "\nExport a backup from Settings now so nothing is lost."); } catch {} });
     localStorage.dayboard = JSON.stringify({ ...JSON.parse(localStorage.dayboard || "{}"), ...o });
   },
 };
@@ -213,11 +216,11 @@ setQuote(QUOTES[day % QUOTES.length]);
 (async () => {
   const key = "dayboard:quote:" + new Date().toDateString();
   try {
-    let c = localStorage[key];
+    let c = localStorage[key]; if (c && /too many requests|auth key/i.test(c)) c = null;
     if (!c) {
       const r = await fetch("https://zenquotes.io/api/today", { signal: AbortSignal.timeout(6000) });
       const [j] = await r.json();
-      if (!j?.q) return;
+      if (!j?.q || /too many requests|auth key|zenquotes/i.test(j.q + j.a)) return; // the service answers rate limits as a "quote"
       Object.keys(localStorage).filter((k) => k.startsWith("dayboard:quote:")).forEach((k) => localStorage.removeItem(k));
       c = localStorage[key] = JSON.stringify([j.q, j.a]);
     }
@@ -726,10 +729,13 @@ function card(t, ci) {
       ${t.done ? "" : `<button class="fx ${t.focus ? "on" : ""}" data-focus="${t.id}" aria-pressed="${!!t.focus}" aria-label="Pin to today's focus" title="Pin to focus (max 3)">${ICON.star(t.focus)}</button>`}
       <button class="fx" data-edit="${t.id}" aria-label="Edit task" title="Edit">${ICON.pen}</button><button class="x" data-del="${t.id}" aria-label="Delete task">×</button></div></li>`;
 }
+let keepBoard = null; // set by a delete: the card is lifted out by hand so the rest of the board does not redraw or flicker
 function renderBoard() {
+  const lifted = keepBoard; keepBoard = null;
   const base = tasks.filter((t) => (!ui.proj || t.proj === ui.proj) && (!ui.tag || t.tags.includes(ui.tag)));
   $("#views").innerHTML = WHEN.map(([k, name]) => `<button class="tab" data-w="${k}" aria-pressed="${ui.when === k}">${name}<span class="mono">${base.filter((t) => !t.done && (k === "all" || (t.due && t.due <= cutoff(k)))).length}</span></button>`).join("");
   $("#filters").innerHTML = [...new Set(open().flatMap((t) => t.tags))].map((g) => `<button class="chip ${ui.tag === g ? "on" : ""}" data-tag="${esc(g)}">#${esc(g)}</button>`).join("");
+  if (lifted) { const c = $(`#cols [data-col="${lifted.col}"] .tools .mono`); if (c) c.textContent = lifted.n; return; } // only the tab and column counts change
   $("#cols").innerHTML = COLS.map(([k, name], ci) => {
     let list = base.filter((t) => colOf(t) === k && passWhen(t)).sort(k === "done" ? (a, b) => (b.doneAt || 0) - (a.doneAt || 0) : byOrd);
     const total = list.length; if (k === "done") list = list.slice(0, 8); // keep Done calm: the latest few
@@ -1178,6 +1184,8 @@ document.addEventListener("click", (e) => {
   if (d.del) {
     const i = tasks.indexOf(t); tasks = tasks.filter((x) => x !== t); sync({ ...t, done: true }); save();
     toTrash("task", t);
+    const li = document.querySelector(`#cols [data-cid="${t.id}"]`), sec = li?.closest("[data-col]");
+    if (li && sec && sec.querySelectorAll("[data-cid]").length > 1 && !ui.editing) { li.remove(); keepBoard = { col: sec.dataset.col, n: sec.querySelectorAll("[data-cid]").length }; }
     undoable(`Deleted “${t.title.slice(0, 32)}”`, () => { tasks.splice(Math.min(i, tasks.length), 0, t); sync(t); trash = trash.filter((x) => x.item !== t); });
   }
   render();
@@ -1252,7 +1260,7 @@ store.get().then((s) => { tasks = s.tasks || []; projects = s.projects || projec
     SEED.filter((x) => x[2] === "@dock").forEach(([name, url]) => links.push({ id: crypto.randomUUID(), name, url, proj: null, dock: true }));
     store.set({ dockSeeded: true }); s.links = null;
   }
-  if (!s.links || s.dirty) save(); notes = s.notes || ""; saved = s.saved || []; if (notes.trim()) { saved.unshift({ id: crypto.randomUUID(), title: titleOf(notes), body: notes, proj: null, ts: Date.now() }); notes = ""; store.set({ saved, notes }); } cur = [...saved].sort((x, y) => y.ts - x.ts)[0]?.id ?? null; mtg = s.meeting || null; hook = s.hook || null; ol = HAS_OL ? s.ol || null : null; olUI(); mtBoot(); hookUI(); mtBtn(); showNote(); render(); syncPrefsUI(); tick(); if (prefs.art !== "both" && !pin) applyArt(); takeSnap(); wxStart(); });
+  if (!s.links || s.dirty) save(); notes = s.notes || ""; saved = s.saved || []; if (notes.trim()) { saved.unshift({ id: crypto.randomUUID(), title: titleOf(notes), body: notes, proj: null, ts: Date.now() }); notes = ""; store.set({ saved, notes }); } cur = [...saved].sort((x, y) => y.ts - x.ts)[0]?.id ?? null; mtg = s.meeting || null; hook = s.hook || null; ol = HAS_OL ? olNorm(s.ol) : null; olUI(); mtBoot(); hookUI(); mtBtn(); showNote(); render(); syncPrefsUI(); tick(); if (prefs.art !== "both" && !pin) applyArt(); takeSnap(); wxStart(); });
 
 /* ---------- calm mode (Z) and idle fade: the interface steps back, the painting stays ---------- */
 const body = document.body;
@@ -1279,11 +1287,20 @@ try { if (localStorage["dayboard:calm"]) setCalm(true); else wake(); } catch { w
 /* ---------- settings: export / import backup ---------- */
 const msg = (m) => ($("#setMsg").textContent = m);
 let incoming = null;
-function toggleSettings(on = $("#settings").hidden) {
-  $("#settings").hidden = !on; $("#gear").setAttribute("aria-expanded", on); if (on) { renderRecover(); storyClose(); wpToggle(false); }
+let setTab = "general"; try { setTab = localStorage["dayboard:settab"] || "general"; } catch {}
+function setPage(t) {
+  if (!$(`#setNav [data-t="${t}"]`) || $(`#setNav [data-t="${t}"]`).hidden) t = "general"; setTab = t; try { localStorage["dayboard:settab"] = t; } catch {}
+  document.querySelectorAll("#setNav [data-t]").forEach((b) => b.setAttribute("aria-current", b.dataset.t === t));
+  document.querySelectorAll("#settings .spg").forEach((p) => (p.hidden = p.dataset.pg !== t)); $("#settings .sbody").scrollTop = 0;
+}
+function toggleSettings(on = $("#settings").hidden, tab) {
+  $("#settings").hidden = $("#setBack").hidden = !on; $("#gear").setAttribute("aria-expanded", on);
+  if (on) { renderRecover(); storyClose(); wpToggle(false); setPage(tab || setTab); $("#settings").focus(); }
   if (!on) { $("#importBox").hidden = true; incoming = null; msg(""); }
   renderNudge();
 }
+$("#setNav").onclick = (e) => { const b = e.target.closest("[data-t]"); if (b) setPage(b.dataset.t); };
+$("#setX").onclick = () => toggleSettings(false);
 
 document.addEventListener("click", (e) => { if (!$("#settings").hidden && !e.target.closest("#settings, #gear, #menu, #bkPop")) toggleSettings(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#settings").hidden) toggleSettings(false); });
@@ -1430,7 +1447,7 @@ function externalUpdate(next) {
   if (next.prefs && !same({ ...prefs, ...next.prefs }, prefs)) { Object.assign(prefs, next.prefs); changed = true; }
   if (changed) { showNote(); render(); syncPrefsUI(); tick(); }
 }
-if (globalThis.chrome?.storage?.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local") externalUpdate(Object.fromEntries(Object.entries(ch).map(([k, v]) => [k, v.newValue]))); });
+if (globalThis.chrome?.storage?.onChanged) chrome.storage.onChanged.addListener((ch, area) => { if (area === "local") externalUpdate(Object.fromEntries(Object.entries(ch).map(([k, v]) => [k, v.newValue]).filter(([k, v]) => !store.mine[k]?.includes(canon(v))))); });
 addEventListener("storage", (e) => { if (e.key === "dayboard" && e.newValue) { try { externalUpdate(JSON.parse(e.newValue)); } catch {} } }); // plain-page preview
 
 /* ---------- sort my head: one task at a time, four gentle answers ---------- */
@@ -1936,7 +1953,7 @@ const palCmds = () => [
   ["Temperature: switch °C / °F", "fahrenheit celsius units temperature degrees", "", () => { prefs.units = useF() ? "c" : "f"; save(); renderWx(); }],
   ["Calendar", "calendar month festivals holidays india diwali holi meetings", "C", () => setTimeout(() => openCal(), 60)],
   ["Calendar: week view", "week calendar meetings schedule timeline agenda", "", () => setTimeout(() => { calMode = "week"; try { localStorage["dayboard:calmode"] = "week"; } catch {} openCal(); }, 60)],
-  ...(HAS_OL ? [["Refresh meetings", "outlook meetings calendar sync refresh reload", "", () => (ol?.url ? mtRefresh(true) : toggleSettings(true))]] : []),
+  ...(HAS_OL ? [["Refresh meetings", "outlook meetings calendar sync refresh reload", "", () => (ol?.url ? mtRefresh(true) : toggleSettings(true, "cal"))]] : []),
   ["One minute breath", "breathe breath pause calm minute reset", "B", () => setTimeout(openBreath, 60)],
   ["Open the day", "morning ritual start begin day intention breathe", "O", () => setTimeout(openDay, 60)],
   ["Look closer", "zoom detail picture painting closer magnify", "L", () => setTimeout(lookStart, 60)],
@@ -2624,6 +2641,7 @@ async function festLoad() { // the full feed once a month; failure just keeps wh
   } catch {}
 }
 /* ---------- meetings: Outlook's published ICS link, read-only (extension only; ics.js parses it) ---------- */
+const olNorm = (o) => { const list = Array.isArray(o?.list) ? o.list.filter((c) => c?.url) : o?.url ? [{ url: o.url, name: "" }] : []; return list.length ? { list, url: list[0].url } : null; }; // old installs stored one { url }
 let ol = null, mt = { ev: [], at: 0, err: "" }, mtBusy = false;
 const HAS_OL = !!globalThis.chrome?.runtime?.id && !!globalThis.ICS;
 try { const c = JSON.parse(localStorage["dayboard:mtgs"] || "null"); if (c?.ev) mt = { ev: c.ev, at: c.at || 0, err: "" }; } catch {}
@@ -2636,22 +2654,30 @@ const inText = (ms) => { const m = Math.max(1, Math.round(ms / 6e4)); return m <
 const agoText = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const olSay = (s, bad) => { const m = $("#olMsg"); if (m) { m.textContent = s; m.classList.toggle("bad", !!bad); } };
 function olUI() {
-  $("#olSec").hidden = !HAS_OL; $("#calRefresh").hidden = !ol?.url;
-  $("#olUrl").placeholder = ol ? "Link saved (hidden)" : "https://outlook.office365.com/owa/calendar/…/calendar.ics";
-  $("#olOn").textContent = ol ? "Replace" : "Connect"; $("#olNow").hidden = $("#olOff").hidden = !ol;
-  if (ol) olSay(mt.err ? `Last refresh failed: ${mt.err}` : mt.at ? `${mt.ev.length} events. Updated ${agoText(mt.at)}.` : "Connected. Reading your calendar…", !!mt.err); else olSay("");
+  $("#olTab").hidden = !HAS_OL; $("#calRefresh").hidden = !ol?.url;
+  $("#olUrl").placeholder = ol ? "Add another calendar link (hidden once saved)" : "https://outlook.office365.com/owa/calendar/…/calendar.ics";
+  $("#olOn").textContent = ol ? "Add calendar" : "Connect"; $("#olNow").hidden = !ol;
+  $("#olName").hidden = !ol && !$("#olUrl").value;
+  $("#olList").innerHTML = (ol?.list || []).map((c, i) => `<li><span>${esc(c.name || "Calendar " + (i + 1))}${mt.errs?.[i] ? ` <small class="w">${esc(mt.errs[i])}</small>` : ""}</span><button type="button" class="pill" data-olx="${i}">Remove</button></li>`).join("");
+  if (ol) olSay(mt.err ? `Last refresh failed: ${mt.err}` : mt.at ? `${mt.ev.length} events from ${ol.list.length} calendar${ol.list.length > 1 ? "s" : ""}. Updated ${agoText(mt.at)}.` : "Connected. Reading your calendar…", !!mt.err); else olSay("");
 }
-function mtChanged() { olUI(); renderNextMtg(); mtSchedule(); if (!$("#cal").hidden) drawCal(); }
+function mtChanged() { olUI(); renderNextMtg(); mtSchedule(); if (cxMode) cxDraw(); if (!$("#cal").hidden) drawCal(); }
+async function mtFetch(c) { // one calendar: its events, or a short reason
+  const r = await fetch(c.url, { cache: "no-store", signal: AbortSignal.timeout(25000) });
+  if (!r.ok) throw { msg: r.status === 404 ? "The link no longer exists. Publish it again and paste the new link." : r.status === 401 || r.status === 403 ? "The link was refused." : `Answered ${r.status}.` };
+  const txt = await r.text(); if (!/BEGIN:VCALENDAR/.test(txt)) throw { msg: "Not a calendar. Use the ICS link, not the HTML one." };
+  const t = Date.now(); return ICS.parse(txt, t - 35 * 864e5, t + 200 * 864e5);
+}
 async function mtRefresh(manual) {
   if (!ol?.url || mtBusy) return; mtBusy = true; $("#calRefresh").classList.add("busy"); if (manual) olSay("Refreshing…");
-  try {
-    const r = await fetch(ol.url, { cache: "no-store", signal: AbortSignal.timeout(25000) });
-    if (!r.ok) throw { msg: r.status === 404 ? "Outlook says the link no longer exists. Publish the calendar again and paste the new link." : r.status === 401 || r.status === 403 ? "Outlook refused the link." : `Outlook answered ${r.status}.` };
-    const txt = await r.text(); if (!/BEGIN:VCALENDAR/.test(txt)) throw { msg: "That link did not return a calendar. Use the ICS link, not the HTML one." };
-    const t = Date.now(), ev = ICS.parse(txt, t - 35 * 864e5, t + 200 * 864e5).slice(0, 2500);
-    mt = { ev, at: Date.now(), err: "" }; try { localStorage["dayboard:mtgs"] = JSON.stringify({ ev, at: mt.at }); } catch {}
-  } catch (e) { mt.err = e.msg || (e.name === "TimeoutError" ? "Outlook took too long to answer." : "Could not reach Outlook. Showing the last copy."); }
-  finally { mtBusy = false; $("#calRefresh").classList.remove("busy"); mtChanged(); }
+  const list = ol.list, got = await Promise.all(list.map((c) => mtFetch(c).then((ev) => ({ ev }), (e) => ({ err: e.msg || (e.name === "TimeoutError" ? "Took too long to answer." : "Could not be reached.") }))));
+  const errs = got.map((g) => g.err || ""), seen = new Set(), ev = [];
+  got.forEach((g) => (g.ev || []).forEach((e) => { if (!seen.has(e.id)) { seen.add(e.id); ev.push(e); } })); // the same invite in two calendars counts once
+  if (got.some((g) => g.ev)) { // keep the last copy only when every calendar failed
+    mt = { ev: ev.slice(0, 4000), at: Date.now(), err: "", errs }; try { localStorage["dayboard:mtgs"] = JSON.stringify({ ev: mt.ev, at: mt.at }); } catch {}
+    if (errs.some(Boolean)) mt.err = `${errs.filter(Boolean).length} of ${list.length} calendars could not be read.`;
+  } else { mt.errs = errs; mt.err = list.length > 1 ? "None of the calendars could be read. Showing the last copy." : errs[0] + " Showing the last copy."; }
+  mtBusy = false; $("#calRefresh").classList.remove("busy"); mtChanged();
 }
 function mtBoot() { if (ol?.url && Date.now() - mt.at > 10 * 6e4) mtRefresh(false); renderNextMtg(); mtSchedule(); }
 setInterval(() => { if (ol?.url) { if (Date.now() - mt.at > 15 * 6e4) mtRefresh(false); renderNextMtg(); } }, 3e4);
@@ -2665,11 +2691,19 @@ $("#olOn").onclick = async () => {
     const ok = await chrome.permissions.request({ origins: o }).catch((e) => { why = e?.message || ""; return false; }); // resolves true at once when already granted
     if (!ok) return olSay(`Chrome did not give Dayboard access to ${url.hostname}${why ? ` (${why})` : ""}. Click Connect again and choose Allow.`, true);
   }
-  ol = { url: url.href }; $("#olUrl").value = ""; mt = { ev: [], at: 0, err: "" }; await store.set({ ol }); olUI(); await mtRefresh(true);
-  if (!mt.err) olSay(`Connected. ${mt.ev.length} events read.`);
+  const list = [...(ol?.list || [])]; if (list.some((c) => c.url === url.href)) return olSay("That calendar is already added.", true);
+  if (list.length >= 6) return olSay("Six calendars is the limit.", true);
+  list.push({ url: url.href, name: $("#olName").value.trim().slice(0, 30) }); ol = olNorm({ list }); $("#olUrl").value = $("#olName").value = "";
+  await store.set({ ol }); olUI(); await mtRefresh(true);
+  if (!mt.err) olSay(`Added. ${mt.ev.length} events from ${ol.list.length} calendar${ol.list.length > 1 ? "s" : ""}.`);
 };
 $("#olNow").onclick = () => mtRefresh(true);
-$("#olOff").onclick = async () => { ol = null; mt = { ev: [], at: 0, err: "" }; try { localStorage.removeItem("dayboard:mtgs"); } catch {} await store.set({ ol: null }); mtChanged(); olSay("Removed. Delete the published link in Outlook too if you like."); };
+$("#olList").onclick = async (e) => {
+  const b = e.target.closest("[data-olx]"); if (!b) return; const list = ol.list.filter((_, i) => i !== +b.dataset.olx);
+  ol = olNorm({ list }); mt = { ev: [], at: 0, err: "" }; try { localStorage.removeItem("dayboard:mtgs"); } catch {} await store.set({ ol });
+  mtChanged(); if (ol) mtRefresh(true); else olSay("Removed. Delete the published link in Outlook too if you like.");
+};
+$("#olUrl").oninput = () => ($("#olName").hidden = !ol && !$("#olUrl").value);
 $("#calRefresh").onclick = () => mtRefresh(true);
 /* the line under the greeting: the next meeting, or how long you are free before it. Free time offers one task that fits. */
 let nm = null, freeSkip = new Set();
@@ -2800,7 +2834,7 @@ function drawCalSide(dueOn) {
   const mo = Object.keys(fest).filter((k) => k.startsWith(`${calY}-${String(calM + 1).padStart(2, "0")}-`)).sort();
   $("#calMonthH").textContent = `Festivals in ${new Date(calY, calM, 1).toLocaleDateString(undefined, { month: "long" })}`;
   $("#calMonth").innerHTML = mo.length ? mo.map((k) => `<li class="btn" data-d="${k}"><b>${+k.slice(8)}</b><span>${esc(fest[k].map((x) => x[0]).join(" · "))}<small>${new Date(k + "T00:00").toLocaleDateString(undefined, { weekday: "long" })}</small></span></li>`).join("") : `<li class="none">No major festivals this month.</li>`;
-  $("#calSrc").textContent = "Festival dates: Google’s public Holidays in India calendar. Lunar festivals can shift by a day." + (ol?.url ? ` Meetings: your Outlook calendar${mt.at ? `, updated ${agoText(mt.at)}` : ""}${mt.err ? ` (last refresh failed: ${mt.err})` : ""}.` : "");
+  $("#calSrc").textContent = "Festival dates: Google’s public Holidays in India calendar. Lunar festivals can shift by a day." + (ol?.url ? ` Meetings: your calendar${ol.list.length > 1 ? "s" : ""}${mt.at ? `, updated ${agoText(mt.at)}` : ""}${mt.err ? ` (last refresh failed: ${mt.err})` : ""}.` : "");
 }
 function calGo(dm) {
   if (calMode === "week") { const d = new Date(calSel + "T00:00"); d.setDate(d.getDate() + 7 * dm); calSel = dkey(d.getFullYear(), d.getMonth(), d.getDate()); calY = d.getFullYear(); calM = d.getMonth(); }
@@ -2825,6 +2859,35 @@ $("#cal").addEventListener("click", (e) => {
   const b = e.target.closest("[data-d]"); if (!b) return; calSel = b.dataset.d; calEv = ""; const d = new Date(calSel + "T00:00"); if (d.getMonth() !== calM || d.getFullYear() !== calY) { calY = d.getFullYear(); calM = d.getMonth(); } drawCal();
 });
 $("#cal").addEventListener("keydown", (e) => { const li = e.target.closest?.("#calDay .mt"); if (li && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); li.click(); } });
+/* hover the week to choose Day, Week, Month or Year; the picked one opens right under the strip and the page eases down to make room */
+let cxMode = "", cxOff = 0;
+const cxItems = (k) => ({ m: ol?.url ? evOn(k).filter((e) => !e.free || e.ad) : [], t: open().filter((x) => x.due === k && !x.wait), f: fest[k] || [] });
+const cxLine = (k) => { const { m, t, f } = cxItems(k); return [...f.map((x) => `<i class="f">${esc(x[0])}</i>`), ...m.map((e) => `<i class="m">${e.ad ? "" : hhmm(e.s) + " "}${esc(e.t)}</i>`), ...t.map((x) => `<i class="t">${esc(x.title)}</i>`)]; };
+function cxMini(y, m, big) { // one month as a small grid of days; days with something on them carry a dot
+  const first = new Date(y, m, 1), lead = (first.getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), tk = today();
+  let h = `<div class="cxm${big ? " big" : ""}"><p>${first.toLocaleDateString(undefined, { month: "long" })}${big ? " " + y : ""}</p><div class="cxg">`;
+  if (big) h += "MTWTFSS".split("").map((c) => `<small>${c}</small>`).join("");
+  h += "<span></span>".repeat(lead);
+  for (let d = 1; d <= n; d++) { const k = dkey(y, m, d), it = cxItems(k), has = it.m.length || it.t.length || it.f.length; h += `<button type="button" data-cd="${k}" class="${k === tk ? "today " : ""}${has ? "has" : ""}" aria-label="${esc(dayLabel(k))}">${d}</button>`; }
+  return h + "</div></div>";
+}
+function cxDraw() {
+  $("#calx").classList.toggle("open", !!cxMode); document.querySelectorAll("#calSeg [data-m]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === cxMode));
+  if (!cxMode) return; const now = new Date(), tk = today(), box = $("#calxi"); let h = "";
+  if (cxMode === "day") { const l = cxLine(tk); h = `<ul class="cxl">${l.length ? l.map((x) => `<li>${x}</li>`).join("") : `<li class="none">Nothing scheduled. A clear day.</li>`}</ul>`; }
+  else if (cxMode === "week") {
+    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    h = `<ul class="cxw">${Array.from({ length: 7 }, (_, i) => { const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i), k = dkey(d.getFullYear(), d.getMonth(), d.getDate()), l = cxLine(k);
+      return `<li class="${k === tk ? "today" : ""}" data-cd="${k}"><b>${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}</b><span>${l.length ? l.slice(0, 3).join("") + (l.length > 3 ? `<em>+${l.length - 3}</em>` : "") : `<i class="none">Free</i>`}</span></li>`; }).join("")}</ul>`;
+  } else if (cxMode === "month") { const d = new Date(now.getFullYear(), now.getMonth() + cxOff, 1); h = `<div class="cxnav"><button type="button" data-cn="-1" aria-label="Previous month">‹</button><button type="button" data-cn="0" class="cxnow">Today</button><button type="button" data-cn="1" aria-label="Next month">›</button></div>` + cxMini(d.getFullYear(), d.getMonth(), true); }
+  else h = `<div class="cxy">${Array.from({ length: 12 }, (_, m) => cxMini(now.getFullYear(), m, false)).join("")}</div>`;
+  box.innerHTML = h;
+}
+$("#calSeg").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; cxMode = cxMode === b.dataset.m ? "" : b.dataset.m; cxOff = 0; cxDraw(); };
+$("#calx").onclick = (e) => {
+  const n = e.target.closest("[data-cn]"); if (n) { cxOff = n.dataset.cn === "0" ? 0 : cxOff + +n.dataset.cn; return cxDraw(); }
+  const d = e.target.closest("[data-cd]"); if (d) openCal(d.dataset.cd);
+};
 $("#weekRow").onclick = () => openCal(); $("#weekRow").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCal(); } };
 addEventListener("keydown", (e) => {
   if (!$("#cal").hidden) { // the calendar has the arrow keys

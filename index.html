@@ -56,21 +56,44 @@
 </div>
 <div id="undo" class="toast" hidden role="status"><span id="undoMsg"></span><button type="button" id="undoBtn" class="pill solid">Undo</button></div>
 <div id="nudge" class="nudge" hidden role="status"><span>Export a backup?</span><button type="button" id="nudgeGo" class="pill solid">Export</button><button type="button" id="nudgeLater" class="pill">Later</button></div>
-<div id="settings" class="settings" hidden role="dialog" aria-label="Settings">
-  <h2>Preferences</h2>
-  <label class="prefrow"><span>City</span><select id="prefCity" class="pill" aria-label="City for sunrise and sunset"></select></label>
-  <div class="prefrow glassrow"><span>Glass transparency</span><span class="glassctl"><small>Solid</small><input type="range" id="prefGlass" min="0" max="100" step="5" aria-label="Glass transparency: solid to clear"><small>Clear</small></span></div>
-  <div class="prefrow"><span>Clock style</span><span class="seg" id="prefClockStyle" role="group" aria-label="Clock style"><button data-v="solid">Solid</button><button data-v="thin">Thin</button><button data-v="frosted">Frosted</button></span></div>
-  <div class="prefrow"><span>Clock</span><span class="seg" id="prefClock" role="group" aria-label="Clock"><button data-v="24">24h</button><button data-v="12">12h</button></span></div>
-  <div class="prefrow"><span>Background</span><span class="seg" id="prefArt" role="group" aria-label="Background"><button data-v="paintings">Art</button><button data-v="photos">Nature</button><button data-v="both">Art + Nature</button></span></div>
-  <div class="prefrow"><span>Time rings on the main page</span><span class="seg" id="prefRings" role="group" aria-label="Time rings"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span>Fresh paintings each week</span><span class="seg" id="prefFresh" role="group" aria-label="Fresh paintings each week"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span>Open the day on the first morning tab</span><span class="seg" id="prefOpenDay" role="group" aria-label="Open the day on the first morning tab"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span>Meeting heads-up (15 min)</span><span class="seg" id="prefHeads" role="group" aria-label="Meeting heads-up"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span>Soft chime</span><span class="seg" id="prefChime" role="group" aria-label="Chime"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span>Golden-hour nudge</span><span class="seg" id="prefGolden" role="group" aria-label="Golden-hour nudge"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <div class="prefrow"><span>Weather on the background</span><span class="seg" id="prefWx" role="group" aria-label="Weather on the background"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
-  <h2>Your data</h2>
+<div id="setBack" class="setback" hidden></div>
+<div id="settings" class="settings sset" hidden role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
+  <aside class="snav"><p class="stitle">Settings</p>
+    <nav id="setNav" aria-label="Settings sections">
+      <button type="button" data-t="general">General</button><button type="button" data-t="appearance">Appearance</button><button type="button" data-t="notify">Notifications</button><button type="button" id="olTab" data-t="cal" hidden>Calendars</button><button type="button" data-t="data">Backup &amp; recovery</button><button type="button" data-t="more">More</button>
+    </nav>
+  </aside>
+  <div class="sbody"><button type="button" id="setX" class="sortx setx" aria-label="Close settings" title="Close (Esc)">×</button>
+  <section class="spg" data-pg="general" hidden><header><h2>General</h2><p>The basics.</p></header>
+  <label class="prefrow"><span class="pl">City<em>Used for sunrise, sunset, golden hour, moon and weather.</em></span><select id="prefCity" class="pill" aria-label="City for sunrise and sunset"></select></label>
+  <div class="prefrow"><span class="pl">Open the day on the first morning tab<em>A short, calm start-of-day on the first tab each morning.</em></span><span class="seg" id="prefOpenDay" role="group" aria-label="Open the day on the first morning tab"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span class="pl">Clock<em>12-hour or 24-hour time.</em></span><span class="seg" id="prefClock" role="group" aria-label="Clock"><button data-v="24">24h</button><button data-v="12">12h</button></span></div>
+  </section>
+  <section class="spg" data-pg="appearance" hidden><header><h2>Appearance</h2><p>How Dayboard looks.</p></header>
+  <div class="prefrow"><span class="pl">Clock style<em>The look of the big clock.</em></span><span class="seg" id="prefClockStyle" role="group" aria-label="Clock style"><button data-v="solid">Solid</button><button data-v="thin">Thin</button><button data-v="frosted">Frosted</button></span></div>
+  <div class="prefrow glassrow"><span class="pl">Glass transparency<em>How see-through the frosted panels are.</em></span><span class="glassctl"><small>Solid</small><input type="range" id="prefGlass" min="0" max="100" step="5" aria-label="Glass transparency: solid to clear"><small>Clear</small></span></div>
+  <div class="prefrow"><span class="pl">Background<em>Where the wallpaper pictures come from.</em></span><span class="seg" id="prefArt" role="group" aria-label="Background"><button data-v="paintings">Art</button><button data-v="photos">Nature</button><button data-v="both">Art + Nature</button></span></div>
+  <div class="prefrow"><span class="pl">Fresh paintings each week<em>Adds new paintings from the museum each week.</em></span><span class="seg" id="prefFresh" role="group" aria-label="Fresh paintings each week"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span class="pl">Time rings on the main page<em>Day, week, month and year progress.</em></span><span class="seg" id="prefRings" role="group" aria-label="Time rings"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span class="pl">Weather on the background<em>Rain, snow and clouds drifting over the picture.</em></span><span class="seg" id="prefWx" role="group" aria-label="Weather on the background"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  </section>
+  <section class="spg" data-pg="notify" hidden><header><h2>Notifications</h2><p>What is allowed to reach you.</p></header>
+  <div class="prefrow"><span class="pl">Meeting heads-up (15 min)<em>A quiet note before each meeting. Reminders wait until it ends.</em></span><span class="seg" id="prefHeads" role="group" aria-label="Meeting heads-up"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span class="pl">Soft chime<em>A gentle two-note sound when something arrives.</em></span><span class="seg" id="prefChime" role="group" aria-label="Chime"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  <div class="prefrow"><span class="pl">Golden-hour nudge<em>A note 30 minutes before sunset.</em></span><span class="seg" id="prefGolden" role="group" aria-label="Golden-hour nudge"><button data-v="on">On</button><button data-v="off">Off</button></span></div>
+  </section>
+  <section class="spg" data-pg="cal" id="olSec" hidden><header><h2>Calendars</h2><p>Meetings appear under the greeting and in the calendar. Add as many ICS links as you like.</p></header>
+  <p class="hint">In Outlook on the web: Settings, Calendar, Shared calendars, Publish a calendar, then copy the ICS link. Google Calendar: settings, Integrate calendar, secret address in iCal format. Dayboard only reads them. Links stay on this device and are never exported.</p>
+
+  
+  <input id="olUrl" class="hookin" type="password" placeholder="https://outlook.office365.com/owa/calendar/…/calendar.ics" autocomplete="off" spellcheck="false" aria-label="Outlook calendar ICS link">
+  <ul id="olList" class="rlist"></ul>
+  <input id="olName" class="hookin" type="text" maxlength="30" placeholder="Name (optional), e.g. Work or Personal" autocomplete="off" aria-label="Calendar name" hidden>
+  <div class="opts"><button type="button" id="olOn" class="pill solid">Connect</button><button type="button" id="olNow" class="pill">Refresh</button></div>
+  <p id="olMsg" class="hint" role="status"></p>
+    </section>
+  <section class="spg" data-pg="data" hidden><header><h2>Backup &amp; recovery</h2><p>Your data lives in this browser. Keep a copy somewhere else.</p></header>
+<h3 class="sh">Export and import</h3>
   <p class="hint">Everything lives in this browser. Export a backup now and then, and import it anywhere.</p>
   <div class="opts"><button type="button" id="exportBtn" class="pill solid">Export backup</button><button type="button" id="importBtn" class="pill">Import…</button></div>
   <input id="importFile" type="file" accept="application/json,.json" hidden>
@@ -81,30 +104,27 @@
   </div>
   <p id="setMsg" class="hint" role="status"></p>
   <p id="backupInfo" class="hint"></p>
-  <h2>Automatic backup</h2>
+  <h3 class="sh">Automatic backup</h3>
   <p class="hint">Once a day, if anything changed, a backup file is posted to your own Discord channel. In Discord: channel settings, Integrations, Webhooks, New webhook, Copy URL. This sends your tasks and notes to Discord, so use a private channel.</p>
   <input id="hookUrl" class="hookin" type="password" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false" aria-label="Discord webhook URL">
   <div class="opts"><button type="button" id="hookOn" class="pill solid">Turn on</button><button type="button" id="hookNow" class="pill">Send now</button><button type="button" id="hookOff" class="pill">Remove</button></div>
   <p id="hookMsg" class="hint" role="status"></p>
-  <div id="olSec" hidden>
-  <h2>Outlook meetings</h2>
-  <p class="hint">Shows your next meeting under the greeting and puts meetings in the calendar. In Outlook on the web: Settings, Calendar, Shared calendars, Publish a calendar, then paste the ICS link here. Dayboard only reads it. The link stays on this device and is never exported.</p>
-  <input id="olUrl" class="hookin" type="password" placeholder="https://outlook.office365.com/owa/calendar/…/calendar.ics" autocomplete="off" spellcheck="false" aria-label="Outlook calendar ICS link">
-  <div class="opts"><button type="button" id="olOn" class="pill solid">Connect</button><button type="button" id="olNow" class="pill">Refresh</button><button type="button" id="olOff" class="pill">Remove</button></div>
-  <p id="olMsg" class="hint" role="status"></p>
-  </div>
-  <h2>Recover</h2>
+  <h3 class="sh">Recover</h3>
   <p class="hint">Deleted notes and tasks stay here for 30 days.</p>
   <ul id="trashList" class="rlist"></ul>
   <p class="hint">Finished tasks move here after 30 days.</p>
   <ul id="archList" class="rlist"></ul>
   <p class="hint">A snapshot is saved at the first open of each day. Restoring only brings back what is missing now.</p>
   <ul id="snapList" class="rlist"></ul>
-  <h2>Your days</h2>
+    </section>
+  <section class="spg" data-pg="more" hidden><header><h2>More</h2><p></p></header>
+<h3 class="sh">Your days</h3>
   <p class="hint">Each finished task adds a brushstroke to the day's painting.</p>
   <div class="opts"><button type="button" id="daysBtn" class="pill">See your days</button></div>
-  <h2>Quick capture</h2>
+  <h3 class="sh">Quick capture</h3>
   <p class="hint">Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> on any tab to jot a task without leaving the page. Change the keys at chrome://extensions/shortcuts.</p>
+  </section>
+  </div>
 </div>
 
 <header class="nav">
@@ -145,8 +165,12 @@
     </figure>
     <div class="sub">
     <p id="date" class="eyebrow"><span id="dateT"></span><button type="button" id="wxChip" class="wxchip" hidden aria-expanded="false" aria-controls="wxPop" title="Weather"></button><span id="wxPop" class="moonpop wxpop" hidden role="dialog" aria-label="Weather"></span></p>
+<div class="calblock" id="calBlock">
     <div class="weekrow" id="weekRow" role="button" tabindex="0" title="Open the calendar  (C)" aria-label="Open the calendar">
       <ol id="week" class="week" aria-label="This week"></ol>
+    </div>
+    <div id="calSeg" class="calseg" role="group" aria-label="Expand the calendar"><button type="button" data-m="day">Day</button><button type="button" data-m="week">Week</button><button type="button" data-m="month">Month</button><button type="button" data-m="year">Year</button></div>
+    <div id="calx" class="calx"><div class="calxi" id="calxi" aria-live="polite"></div></div>
     </div>
     <h1 id="greet"></h1>
     <div class="nmwrap"><button type="button" id="nextMtg" class="nextmtg" hidden title="Open your calendar"></button><div id="freeCard" class="moonpop freecard" hidden role="dialog" aria-label="Free time"></div></div>
@@ -158,6 +182,10 @@
       <figcaption id="paintCap"></figcaption>
       <button type="button" id="paintShow" class="pshow" aria-label="Show the painting">Show painting</button>
     </figure>
+    <figure class="quote">
+      <blockquote id="quote"></blockquote>
+      <figcaption id="author"></figcaption>
+    </figure>
     </div>
     </div>
     <div class="hr">
@@ -168,10 +196,6 @@
       <div class="opts"><button type="button" id="windWrap" class="pill solid">Wrap up the day</button><button type="button" id="windNotes" class="pill">Empty your head into Notes</button><button type="button" id="windX" class="pill">Not yet</button></div>
     </div>
     <div class="focus"><h2>What matters today <span id="fmsg" role="status"></span></h2><ul id="focus"></ul></div>
-    <figure class="quote">
-      <blockquote id="quote"></blockquote>
-      <figcaption id="author"></figcaption>
-    </figure>
     </div>
   </section>
 
