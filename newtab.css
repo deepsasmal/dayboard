@@ -1189,3 +1189,17 @@ body.zen .nowpark,body.zen .nowup,body.zen .nowalso,body.zen .now [data-n=deep],
 .fx2{background:none;border:0;color:var(--slate);font-size:18px;line-height:1;width:24px;height:24px;border-radius:50%;cursor:pointer;opacity:0;transition:opacity .2s,background .2s,color .2s}
 .focus li:hover .fx2,.fx2:focus-visible{opacity:1}.fx2:hover{background:var(--glass);color:#fff}
 @media(pointer:coarse){.fx2{opacity:.8}}
+
+/* smoother picker: a way back, and the new view fades in */
+.calclose{display:none!important;place-items:center;min-width:28px}
+.calseg:has([aria-pressed=true]) .calclose{display:grid!important}
+.calclose:hover{color:#fff!important}
+.calxi>*{animation:in .38s var(--ease)}
+.calseg button{transition:background .3s var(--ease),color .3s var(--ease),transform .2s var(--ease)}.calseg button:active{transform:scale(.92)}
+/* one rhythm for hover and press across the page */
+.card{transition:transform .3s var(--ease),border-color .25s,background .25s,box-shadow .3s var(--ease)}
+.rf,.sn,.fx,.x,.check{transition:background .25s var(--ease),color .25s,border-color .25s,transform .2s var(--ease),opacity .25s}
+.rf:active,.check:active{transform:scale(.9)}
+.col{transition:background .3s var(--ease),outline-color .3s}
+html{scroll-behavior:smooth}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.calseg button{min-width:24px;padding:4px 6px}.calclose{min-width:24px!important}.calblock{column-gap:8px}

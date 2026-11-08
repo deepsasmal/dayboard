@@ -729,6 +729,19 @@ function card(t, ci) {
       ${t.done ? "" : `<button class="fx ${t.focus ? "on" : ""}" data-focus="${t.id}" aria-pressed="${!!t.focus}" aria-label="Pin to today's focus" title="Pin to focus (max 3)">${ICON.star(t.focus)}</button>`}
       <button class="fx" data-edit="${t.id}" aria-label="Edit task" title="Edit">${ICON.pen}</button><button class="x" data-del="${t.id}" aria-label="Delete task">×</button></div></li>`;
 }
+/* cards glide to their new places instead of jumping (Web Animations: nothing stays on the GPU afterwards) */
+const calmMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const EASE = "cubic-bezier(.22,1,.36,1)";
+function flipStart() { const m = new Map(); if (!calmMotion.matches) document.querySelectorAll("#cols [data-cid]").forEach((el) => m.set(el.dataset.cid, el.getBoundingClientRect())); return m; }
+function flipEnd(old) {
+  if (calmMotion.matches || !old.size) return;
+  document.querySelectorAll("#cols [data-cid]").forEach((el) => {
+    const o = old.get(el.dataset.cid);
+    if (!o) return void el.animate([{ opacity: 0, transform: "translateY(8px) scale(.97)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: EASE });
+    const n = el.getBoundingClientRect(), dx = o.left - n.left, dy = o.top - n.top;
+    if (Math.abs(dx) + Math.abs(dy) > 1) el.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 420, easing: EASE });
+  });
+}
 let keepBoard = null; // set by a delete: the card is lifted out by hand so the rest of the board does not redraw or flicker
 function renderBoard() {
   const lifted = keepBoard; keepBoard = null;
@@ -736,6 +749,7 @@ function renderBoard() {
   $("#views").innerHTML = WHEN.map(([k, name]) => `<button class="tab" data-w="${k}" aria-pressed="${ui.when === k}">${name}<span class="mono">${base.filter((t) => !t.done && (k === "all" || (t.due && t.due <= cutoff(k)))).length}</span></button>`).join("");
   $("#filters").innerHTML = [...new Set(open().flatMap((t) => t.tags))].map((g) => `<button class="chip ${ui.tag === g ? "on" : ""}" data-tag="${esc(g)}">#${esc(g)}</button>`).join("");
   if (lifted) { const c = $(`#cols [data-col="${lifted.col}"] .tools .mono`); if (c) c.textContent = lifted.n; return; } // only the tab and column counts change
+  const flip = flipStart();
   $("#cols").innerHTML = COLS.map(([k, name], ci) => {
     let list = base.filter((t) => colOf(t) === k && passWhen(t)).sort(k === "done" ? (a, b) => (b.doneAt || 0) - (a.doneAt || 0) : byOrd);
     const total = list.length; if (k === "done") list = list.slice(0, 8); // keep Done calm: the latest few
@@ -744,6 +758,7 @@ function renderBoard() {
         : `<li class="cempty">${k === "todo" ? "Nothing queued. Press A to add." : k === "doing" ? "Drag a card here to start." : k === "waiting" ? "Nobody owes you anything." : "Finished tasks land here."}</li>`)
       + `</ul></section>`;
   }).join("");
+  flipEnd(flip);
   if (ui.editing) $("#ceTitle")?.focus();
 }
 function track(t, was) { // time on a task runs while it sits in Doing and is not paused
@@ -1205,7 +1220,11 @@ document.addEventListener("click", (e) => {
     const i = tasks.indexOf(t); tasks = tasks.filter((x) => x !== t); sync({ ...t, done: true }); save();
     toTrash("task", t);
     const li = document.querySelector(`#cols [data-cid="${t.id}"]`), sec = li?.closest("[data-col]");
-    if (li && sec && sec.querySelectorAll("[data-cid]").length > 1 && !ui.editing) { li.remove(); keepBoard = { col: sec.dataset.col, n: sec.querySelectorAll("[data-cid]").length }; }
+    if (li && sec && sec.querySelectorAll("[data-cid]").length > 1 && !ui.editing) {
+      keepBoard = { col: sec.dataset.col, n: sec.querySelectorAll("[data-cid]").length - 1 };
+      const gone = () => { const o = flipStart(); li.remove(); flipEnd(o); };
+      if (calmMotion.matches) gone(); else { li.style.pointerEvents = "none"; li.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.95)" }], { duration: 160, easing: "ease-out", fill: "forwards" }).onfinish = gone; }
+    }
     undoable(`Deleted “${t.title.slice(0, 32)}”`, () => { tasks.splice(Math.min(i, tasks.length), 0, t); sync(t); trash = trash.filter((x) => x.item !== t); });
   }
   render();
@@ -2913,6 +2932,7 @@ function cxDraw() {
   else h = `<div class="cxy">${Array.from({ length: 12 }, (_, m) => cxMini(now.getFullYear(), m, false)).join("")}</div>`;
   box.innerHTML = h;
 }
+addEventListener("keydown", (e) => { if (e.key === "Escape" && cxMode && !typingNow() && !zenOpen() && $("#settings").hidden && $("#menu").hidden) { cxMode = ""; cxDraw(); } });
 $("#calSeg").onclick = (e) => { const b = e.target.closest("[data-m]"); if (!b) return; cxMode = cxMode === b.dataset.m ? "" : b.dataset.m; cxOff = 0; cxDraw(); };
 $("#calx").onclick = (e) => {
   const n = e.target.closest("[data-cn]"); if (n) { cxOff = n.dataset.cn === "0" ? 0 : cxOff + +n.dataset.cn; return cxDraw(); }
