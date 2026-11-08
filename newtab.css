@@ -1154,3 +1154,4 @@ body.zen .calblock{display:none!important}
 .cchip:has(input:checked){color:#fff}.cchip input:focus-visible{outline:2px solid rgba(232,168,92,.75);outline-offset:2px}
 /* quote: fills the width instead of a narrow column */
 .hl .quote{max-width:none;margin-top:26px}.hl .quote blockquote{font-size:clamp(20px,2.1vw,30px);line-height:1.32;text-wrap:balance}
+.hr{align-self:start}
