@@ -1234,3 +1234,10 @@ body[data-hide~=week] .calblock,body[data-hide~=sun] #sun,body[data-hide~=quote]
 body[data-hide~=nextmtg] .nmwrap,body[data-hide~=wx] #wxChip,body[data-hide~=dock] .dock,body[data-hide~=bell] #bellWrap{display:none!important}
 body[data-hide~=side] .side{display:none!important}
 @media(min-width:1100px){body[data-hide~=side] .shell{grid-template-columns:minmax(0,1fr)}}
+
+/* the day widget lives in the right column, under the rings */
+.hr .dayw{width:100%;margin:0 0 22px}.hr .dayw .tlscroll{max-height:240px}
+.timerow .dayw{display:none}
+.dwh>span{display:flex;align-items:baseline;gap:10px}.dwnow{background:none;border:1px solid var(--line);color:var(--ash);font:inherit;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:1px 9px;border-radius:9999px;cursor:pointer;transition:all .25s var(--ease)}.dwnow:hover{color:#fff;border-color:rgba(255,255,255,.4)}
+.tl .tlscroll{max-height:300px}.hr .dayw .tlscroll{max-height:300px}
+.tlgrid{margin-bottom:170px}

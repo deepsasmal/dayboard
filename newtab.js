@@ -1424,7 +1424,7 @@ const glassK = (v) => (v <= 50 ? 1 + (50 - v) / 50 * .6 : 1 - (v - 50) / 50 * .7
 const WIDGETS = [
   ["week", "Week strip", "The days of this week, with the Day, Week, Month, Year picker."], ["sun", "Sun and moon arc", "Sunrise, sunset and the moon's phase."],
   ["paint", "Painting caption", "The small picture card with the painting's name."], ["quote", "Quote of the day", ""],
-  ["dayw", "Day timeline", "Today's meetings by the hour, with a pointer for now. Needs a calendar."], ["rings", "Time rings", "Day, week, month and year progress."],
+  ["dayw", "Day timeline", "Today by the hour, with a pointer for now and your meetings."], ["rings", "Time rings", "Day, week, month and year progress."],
   ["wind", "Winding down", "The evening note with Wrap up the day."], ["focus", "What matters today", "Up to three pinned tasks."],
   ["nextmtg", "Next meeting line", "Under the greeting. Needs a calendar."], ["wx", "Weather chip", "The temperature beside the date."],
   ["dock", "Quick navigation strip", "Below the task board."], ["side", "Side panel", "Counts and projects."], ["bell", "Notification bell", ""],
@@ -1432,7 +1432,7 @@ const WIDGETS = [
 const wgOn = (k) => (k === "rings" ? prefs.rings !== "off" : k === "dayw" ? prefs.dayw !== "off" : k === "paint" ? !prefs.paintHide : !(prefs.hide || []).includes(k));
 function applyHide() { const v = (prefs.hide || []).join(" "); document.body.dataset.hide = v; try { localStorage["dayboard:hide"] = v; } catch {} }
 function wgDraw() {
-  $("#wgList").innerHTML = WIDGETS.filter(([k]) => (k === "dayw" || k === "nextmtg" ? HAS_OL : k === "bell" ? EXT : true)).map(([k, n, d]) => `<div class="prefrow"><span class="pl">${n}${d ? `<em>${d}</em>` : ""}</span><span class="seg" data-w="${k}" role="group" aria-label="${n}"><button data-v="on" aria-pressed="${wgOn(k)}">On</button><button data-v="off" aria-pressed="${!wgOn(k)}">Off</button></span></div>`).join("");
+  $("#wgList").innerHTML = WIDGETS.filter(([k]) => (k === "nextmtg" ? HAS_OL : k === "bell" ? EXT : true)).map(([k, n, d]) => `<div class="prefrow"><span class="pl">${n}${d ? `<em>${d}</em>` : ""}</span><span class="seg" data-w="${k}" role="group" aria-label="${n}"><button data-v="on" aria-pressed="${wgOn(k)}">On</button><button data-v="off" aria-pressed="${!wgOn(k)}">Off</button></span></div>`).join("");
 }
 $("#wgList").onclick = (e) => {
   const b = e.target.closest("[data-v]"), k = b?.parentNode.dataset.w; if (!k) return; const on = b.dataset.v === "on";
@@ -2948,19 +2948,19 @@ const TLH = 46; // px per hour
 function dayTL(k, now) {
   const a = dayStart(k), z = a + 864e5, nowMs = now.getTime(), isToday = k === today();
   const all = ol?.url ? evOn(k) : [], ad = all.filter((e) => e.ad), ev = all.filter((e) => !e.ad && !e.free && !e.cancelled).map((e) => ({ ...e, s: Math.max(e.s, a), e: Math.min(e.e, z) })).sort((x, y) => x.s - y.s || y.e - x.e);
-  let h0 = 7, h1 = 20; ev.forEach((e) => { h0 = Math.min(h0, Math.floor((e.s - a) / 36e5)); h1 = Math.max(h1, Math.ceil((e.e - a) / 36e5)); }); h0 = Math.max(0, h0); h1 = Math.min(24, h1);
+  const h0 = 0, h1 = 24; // the whole day, scrollable
   const top = (ms) => ((ms - a) / 36e5 - h0) * TLH;
   let cl = [], end = 0; // overlapping meetings share the width
   ev.forEach((e) => { if (e.s >= end) { cl.forEach((x) => (x.n = cl.length)); cl = []; } let c = 0; while (cl.some((x) => x.col === c && x.e > e.s)) c++; e.col = c; cl.push(e); end = Math.max(end, e.e); }); cl.forEach((x) => (x.n = cl.length));
   const cur = ev.find((e) => e.s <= nowMs && e.e > nowMs), nxt = isToday ? ev.find((e) => e.s > nowMs) : ev[0];
-  const head = !all.length && !ol?.url ? "Connect a calendar in Settings to see meetings here." : cur ? `Now · ${esc(cur.t)} · until ${hhmm(cur.e)}` : nxt ? `${isToday ? "Next" : "First"} · ${esc(nxt.t)} · ${isToday ? "in " + inText(nxt.s - nowMs) : hhmm(nxt.s)}` : "Nothing more scheduled. A clear stretch.";
+  const head = !ol?.url ? (HAS_OL ? "No calendar yet. Add one in Settings to see meetings here." : "Your day, hour by hour.") : cur ? `Now · ${esc(cur.t)} · until ${hhmm(cur.e)}` : nxt ? `${isToday ? "Next" : "First"} · ${esc(nxt.t)} · ${isToday ? "in " + inText(nxt.s - nowMs) : hhmm(nxt.s)}` : "Nothing more scheduled. A clear stretch.";
   let rows = ""; for (let hr = h0; hr < h1; hr++) rows += `<div class="tlh" style="top:${(hr - h0) * TLH}px"><span>${prefs.clock === "12" ? ((hr + 11) % 12 + 1) + (hr < 12 ? "a" : "p") : String(hr).padStart(2, "0")}</span></div>`;
   const blocks = ev.map((e) => { const t = top(e.s), ht = Math.max(22, top(e.e) - t - 2), w = 100 / e.n;
     return `<button type="button" class="tle${e.tent ? " tent" : ""}${e === cur ? " cur" : e === nxt ? " nxt" : ""}${isToday && e.e <= nowMs ? " past" : ""}" data-cd="${k}" data-ev="${esc(e.id)}" style="top:${t}px;height:${ht}px;left:calc(${e.col * w}% + 1px);width:calc(${w}% - 3px)"><b>${esc(e.t)}</b>${ht > 34 ? `<small>${hhmm(e.s)} – ${hhmm(e.e)}</small>` : ""}</button>`; }).join("");
   const ptr = isToday && nowMs >= a + h0 * 36e5 && nowMs < a + h1 * 36e5 ? `<div class="tlnow" style="top:${top(nowMs)}px"><span>${hhmm(nowMs)}</span></div>` : "";
   const tk = open().filter((x) => x.due === k && !x.wait).slice(0, 4), f = fest[k] || [];
   return `<div class="tl"><p class="tlhead${cur ? " live" : ""}">${head}</p>${ad.length || f.length ? `<p class="tlad">${[...f.map((x) => x[0]), ...ad.map((e) => e.t)].slice(0, 3).map((x) => `<i>${esc(x)}</i>`).join("")}</p>` : ""}
-    <div class="tlscroll" data-now="${isToday ? Math.max(0, top(nowMs) - TLH * 1.5) : Math.max(0, (ev[0] ? top(ev[0].s) : 2 * TLH) - TLH)}"><div class="tlgrid" style="height:${(h1 - h0) * TLH}px">${rows}${blocks}${ptr}</div></div>
+    <div class="tlscroll" data-now="${isToday ? Math.max(0, top(nowMs) - 120) : Math.max(0, (ev[0] ? top(ev[0].s) : 2 * TLH) - TLH)}"><div class="tlgrid" style="height:${(h1 - h0) * TLH}px">${rows}${blocks}${ptr}</div></div>
     ${tk.length ? `<p class="tltasks">${tk.map((x) => `<i>${esc(x.title.slice(0, 30))}</i>`).join("")}</p>` : ""}</div>`;
 }
 function cxDraw() {
@@ -3113,9 +3113,12 @@ $("#now").onkeydown = (e) => {
   tasks.push(t); sync(t); save(); const f = $("#nowPark"); render(); $("#nowPark")?.focus(); flash("Parked for later.");
 };
 function renderDayW() { // the always-on widget: the same timeline, in its own place beside the greeting
-  const box = $("#dayw"), on = HAS_OL && ol?.url && prefs.dayw !== "off"; box.hidden = !on; if (!on) { box.innerHTML = ""; return; }
-  const old = box.querySelector(".tlscroll")?.scrollTop; box.innerHTML = `<h3 class="dwh">Today<small>${new Date().toLocaleDateString(undefined, { weekday: "long" })}</small></h3>` + dayTL(today(), new Date());
-  const sc = box.querySelector(".tlscroll"); if (sc) sc.scrollTop = old ?? +sc.dataset.now;
+  const box = $("#dayw"), on = prefs.dayw !== "off"; box.hidden = !on; if (!on) { box.innerHTML = ""; return; }
+  const old = box.querySelector(".tlscroll")?.scrollTop; box.innerHTML = `<h3 class="dwh">Today<span><button type="button" id="dwNow" class="dwnow" title="Back to now">Now</button><small>${new Date().toLocaleDateString(undefined, { weekday: "long" })}</small></span></h3>` + dayTL(today(), new Date());
+  const sc = box.querySelector(".tlscroll"), v = dwTouched && old != null ? old : sc ? +sc.dataset.now : 0; // follows the pointer until you scroll it yourself
+  if (sc) { sc.scrollTop = v; requestAnimationFrame(() => (sc.scrollTop = v)); }
 }
-$("#dayw").onclick = (e) => { const ev = e.target.closest("[data-ev]"); if (ev) openCal(ev.dataset.cd, ev.dataset.ev); };
+let dwTouched = false; $("#dayw").addEventListener("wheel", () => (dwTouched = true), { passive: true }); $("#dayw").addEventListener("touchmove", () => (dwTouched = true), { passive: true });
+$("#dayw").onclick = (e) => {
+  if (e.target.closest("#dwNow")) { dwTouched = false; const sc = $("#dayw .tlscroll"); if (sc) sc.scrollTo({ top: +sc.dataset.now, behavior: "smooth" }); return; } const ev = e.target.closest("[data-ev]"); if (ev) openCal(ev.dataset.cd, ev.dataset.ev); };
 setInterval(live(() => { if (cxMode === "day") cxDraw(); renderDayW(); }), 6e4); // moves the pointer
